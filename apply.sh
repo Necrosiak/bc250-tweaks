@@ -288,6 +288,20 @@ apply_proton_ge() {
 # ══════════════════════════════════════════════════════════════════════════════
 # 14. bc250-cu-live-manager (gestionnaire de CU/WGP via UMR)
 # ══════════════════════════════════════════════════════════════════════════════
+apply_umr_sudoers() {
+    local sudoers_file="/etc/sudoers.d/bc250-umr"
+    local expected_line="$TARGET_USER ALL=(root) NOPASSWD: /usr/bin/umr"
+
+    if [ -f "$sudoers_file" ] && grep -qF "$expected_line" "$sudoers_file" 2>/dev/null; then
+        skip "sudoers umr ($sudoers_file déjà configuré)"
+        return
+    fi
+
+    echo "$expected_line" > "$sudoers_file"
+    chmod 440 "$sudoers_file"
+    log "sudoers umr configuré : $TARGET_USER peut lancer umr sans mot de passe"
+}
+
 apply_cu_manager() {
     local dst="/usr/local/bin/bc250-cu-live-manager"
 
@@ -343,6 +357,7 @@ main() {
     apply_mangohud
     apply_vkbasalt
     apply_proton_ge
+    apply_umr_sudoers
     apply_cu_manager
 
     echo ""
