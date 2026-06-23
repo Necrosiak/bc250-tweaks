@@ -1,9 +1,9 @@
 #!/bin/bash
 # Bootstrap : à lancer une seule fois sur une install Bazzite fraîche
-# Usage : curl -sL https://raw.githubusercontent.com/TON_USER/bc250-tweaks/main/bootstrap.sh | sudo bash
+# Usage : curl -sL https://raw.githubusercontent.com/Necrosiak/bc250-tweaks/main/bootstrap.sh | sudo bash
 set -euo pipefail
 
-REPO_URL="https://github.com/TON_USER/bc250-tweaks.git"
+REPO_URL="https://github.com/Necrosiak/bc250-tweaks.git"
 INSTALL_DIR="/opt/bc250-tweaks"
 SERVICE_SRC="$INSTALL_DIR/systemd/bc250-tweaks.service"
 SERVICE_DST="/etc/systemd/system/bc250-tweaks.service"
