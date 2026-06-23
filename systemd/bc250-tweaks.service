@@ -1,0 +1,14 @@
+[Unit]
+Description=BC-250 Tweaks — auto-update et application au boot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/bc250-tweaks/update.sh
+RemainAfterExit=yes
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

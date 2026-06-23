@@ -1,0 +1,9 @@
+[scx_loader]
+default_sched = "scx_lavd"
+default_mode = "Auto"
+
+[scheds.scx_lavd]
+auto_mode = ["--autopower"]
+gaming_mode = ["--autopower"]
+latency_mode = ["--autopower"]
+powersave_mode = ["--autopower"]

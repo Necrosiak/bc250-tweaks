@@ -1,0 +1,10 @@
+[Unit]
+Description=Game Mode Daemon
+After=dbus.service
+
+[Service]
+ExecStart=/usr/local/bin/gamemoded -r
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
