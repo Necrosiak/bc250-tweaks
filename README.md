@@ -33,6 +33,7 @@ Le script clone ce repo dans `/opt/bc250-tweaks` et installe un service systemd 
 | 11 | MangoHud | `~/.config/MangoHud/MangoHud.conf` | Overlay léger, toggle Shift+F12 |
 | 12 | vkBasalt CAS | `~/.config/vkBasalt.conf` | Sharpening adaptatif, toggle Home |
 | 13 | Proton-GE | `~/.steam/steam/compatibilitytools.d/` | Dernière version GE-Proton |
+| 14 | bc250-cu-live-manager | `/usr/local/bin/bc250-cu-live-manager` | Outil CLI de gestion des Compute Units via umr (GUI disponible dans le plugin DeckyLoader) |
 
 ### Option de lancement Steam recommandée
 
