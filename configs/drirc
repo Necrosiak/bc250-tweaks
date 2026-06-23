@@ -1,0 +1,8 @@
+<driconf>
+  <device>
+    <application name="Default">
+      <!-- Unified heap: GPU uses system RAM pool directly — évite OOM sur jeux VRAM-intensifs (BC-250 APU) -->
+      <option name="radv_enable_unified_heap_on_apu" value="true" />
+    </application>
+  </device>
+</driconf>

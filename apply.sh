@@ -70,7 +70,14 @@ apply_env_gaming() {
 }
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 3. Pipewire latence
+# 3. DRI config — unified heap APU (évite OOM VRAM sur les gros jeux)
+# ══════════════════════════════════════════════════════════════════════════════
+apply_drirc() {
+    install_file "$CONFIGS/drirc" "/etc/drirc"
+}
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 4. Pipewire latence
 # ══════════════════════════════════════════════════════════════════════════════
 apply_pipewire() {
     install_user_file "$CONFIGS/pipewire-gaming.conf" \
@@ -93,6 +100,7 @@ apply_kargs() {
     local need_kargs=0
     local kargs=(
         "amdgpu.ppfeaturemask=0xffffffff"
+        "amdgpu.gttsize=14750"
         "split_lock_detect=off"
         "transparent_hugepage=madvise"
     )
@@ -292,6 +300,7 @@ main() {
 
     apply_tuned
     apply_env_gaming
+    apply_drirc
     apply_pipewire
     apply_sysctl
     apply_kargs
