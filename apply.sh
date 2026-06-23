@@ -286,6 +286,37 @@ apply_proton_ge() {
 }
 
 # ══════════════════════════════════════════════════════════════════════════════
+# 14. bc250-cu-live-manager (gestionnaire de CU/WGP via UMR)
+# ══════════════════════════════════════════════════════════════════════════════
+apply_cu_manager() {
+    local dst="/usr/local/bin/bc250-cu-live-manager"
+
+    if [ -x "$dst" ]; then
+        skip "bc250-cu-live-manager ($dst déjà installé)"
+        return
+    fi
+
+    # Priorité : copie locale si présente
+    local local_src="$TARGET_HOME/bc250-cu-live-manager.sh"
+    if [ -f "$local_src" ]; then
+        install -m 0755 "$local_src" "$dst"
+        log "bc250-cu-live-manager installé depuis $local_src"
+        return
+    fi
+
+    # Sinon télécharger depuis GitHub (WinnieLV/bc250-cu-live-manager)
+    log "Téléchargement de bc250-cu-live-manager depuis GitHub..."
+    local url="https://raw.githubusercontent.com/WinnieLV/bc250-cu-live-manager/main/bc250-cu-live-manager.sh"
+    if curl -sL "$url" -o "$dst" 2>/dev/null && [ -s "$dst" ]; then
+        chmod 0755 "$dst"
+        log "bc250-cu-live-manager installé dans $dst"
+    else
+        rm -f "$dst"
+        warn "Impossible d'installer bc250-cu-live-manager (pas de réseau ?)"
+    fi
+}
+
+# ══════════════════════════════════════════════════════════════════════════════
 # MAIN
 # ══════════════════════════════════════════════════════════════════════════════
 main() {
@@ -312,6 +343,7 @@ main() {
     apply_mangohud
     apply_vkbasalt
     apply_proton_ge
+    apply_cu_manager
 
     echo ""
     echo "═══════════════════════════════════════════════════"
