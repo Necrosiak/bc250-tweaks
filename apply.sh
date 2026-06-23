@@ -47,18 +47,17 @@ install_user_file() {
 }
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 1. Profil tuned
+# 1. Profil tuned — géré par PPD sur Bazzite, on vérifie juste la config
 # ══════════════════════════════════════════════════════════════════════════════
 apply_tuned() {
-    local profile="throughput-performance-bazzite"
-    local current
-    current=$(cat /etc/tuned/active_profile 2>/dev/null || echo "")
-    if [ "$current" != "$profile" ]; then
-        echo "$profile" > /etc/tuned/active_profile
-        tuned-adm profile "$profile" 2>/dev/null || true
-        log "Tuned → $profile"
+    # Sur Bazzite, PPD gère tuned dynamiquement via /etc/tuned/ppd.conf :
+    #   balanced   → balanced-bazzite       (repos)
+    #   performance → throughput-performance-bazzite (jeu via gamemode)
+    # Ne pas forcer le profil statiquement — PPD l'écraserait.
+    if grep -q "throughput-performance-bazzite" /etc/tuned/ppd.conf 2>/dev/null; then
+        skip "Tuned (géré par PPD — throughput-performance-bazzite actif en mode performance)"
     else
-        skip "Tuned ($profile)"
+        warn "Tuned : /etc/tuned/ppd.conf introuvable ou mal configuré"
     fi
 }
 
