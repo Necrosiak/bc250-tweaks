@@ -302,6 +302,27 @@ apply_umr_sudoers() {
     log "sudoers umr configuré : $TARGET_USER peut lancer umr sans mot de passe"
 }
 
+apply_cu_boot_sudoers() {
+    local sudoers_file="/etc/sudoers.d/bc250-cu-boot"
+    local marker="bc250-cu-boot-sudoers-v1"
+
+    if [ -f "$sudoers_file" ] && grep -qF "$marker" "$sudoers_file" 2>/dev/null; then
+        skip "sudoers cu-boot ($sudoers_file déjà configuré)"
+        return
+    fi
+
+    cat > "$sudoers_file" <<EOF
+# $marker — BC250-Toolkit-Decky : persistance profil CU au boot
+$TARGET_USER ALL=(root) NOPASSWD: /usr/bin/tee /usr/local/bin/bc250-cu-restore
+$TARGET_USER ALL=(root) NOPASSWD: /usr/bin/chmod 755 /usr/local/bin/bc250-cu-restore
+$TARGET_USER ALL=(root) NOPASSWD: /usr/bin/tee /etc/systemd/system/bc250-cu-profile.service
+$TARGET_USER ALL=(root) NOPASSWD: /usr/bin/systemctl daemon-reload
+$TARGET_USER ALL=(root) NOPASSWD: /usr/bin/systemctl enable bc250-cu-profile.service
+EOF
+    chmod 440 "$sudoers_file"
+    log "sudoers cu-boot configuré : $TARGET_USER peut écrire le service CU boot sans mot de passe"
+}
+
 apply_cu_manager() {
     local dst="/usr/local/bin/bc250-cu-live-manager"
 
@@ -358,6 +379,7 @@ main() {
     apply_vkbasalt
     apply_proton_ge
     apply_umr_sudoers
+    apply_cu_boot_sudoers
     apply_cu_manager
 
     echo ""
