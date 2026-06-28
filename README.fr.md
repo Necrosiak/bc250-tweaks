@@ -70,7 +70,8 @@ sudo /opt/bc250-tweaks/update.sh
 - Certains jeux ne reconnaissent pas ce GPU → spoof DXVK : `DXVK_CONFIG="dxgi.customDeviceId=731F dxgi.customVendorId=1002"`
 - **TDP** : ryzenadj et adjustor non supportés sur V2000 (Fam17h model 71)
 - **Kernels à éviter** : 6.15.0–6.15.6 et 6.17.8–6.17.10 (driver GPU broken)
-- **ReBAR/SAM** : supporté
+- **ReBAR/SAM** : la capacité Resizable BAR existe mais plafonne à 1 Go sur le BC-250 (souvent laissée à 256 Mo) — insuffisant pour les gros jeux DX12. Utiliser l'**UMA Frame Buffer** du BIOS à la place.
+- **UE5 DX12 « out of video memory »** : certains jeux Unreal Engine 5 en DX12 crashent à l'init du rendu alors qu'il reste de la VRAM libre. Le unified heap global (tweak #3) aide les jeux DXVK/Vulkan mais masque la VRAM dédiée à VKD3D (DX12). Fix : régler l'**UMA Frame Buffer** du BIOS sur Auto (~8 Go sur une carte 16 Go) et désactiver le unified heap par jeu — le [BC250 Toolkit](https://github.com/Necrosiak/bc250-toolkit-decky) le fait automatiquement via son preset `ue5_dx12_oom`.
 
 ---
 
