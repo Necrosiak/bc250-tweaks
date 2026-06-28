@@ -3,7 +3,8 @@ Description=Game Mode Daemon
 After=dbus.service
 
 [Service]
-ExecStart=/usr/local/bin/gamemoded -r
+Type=simple
+ExecStart=/usr/local/bin/gamemoded
 Restart=on-failure
 
 [Install]

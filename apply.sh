@@ -232,7 +232,13 @@ apply_hhd() {
 apply_scx() {
     install_file "$CONFIGS/scx_loader.toml" "/etc/scx_loader/config.toml"
     systemctl enable --now scx_loader.service 2>/dev/null || true
-    log "scx_loader activé (scx_lavd --autopower)"
+    # scx_loader (Type=dbus) ne charge AUCUN scheduler au boot : il reste on-demand.
+    # Le flag --auto désactiverait l'interface D-Bus (scxctl/Steam perdraient le contrôle).
+    # → service oneshot qui appelle scxctl start au boot (D-Bus préservé).
+    install_file "$CONFIGS/bc250-scx-autostart.service" "/etc/systemd/system/bc250-scx-autostart.service"
+    systemctl daemon-reload 2>/dev/null || true
+    systemctl enable --now bc250-scx-autostart.service 2>/dev/null || true
+    log "scx_loader activé + autostart scx_lavd au boot"
 }
 
 # ══════════════════════════════════════════════════════════════════════════════
