@@ -103,6 +103,11 @@ apply_kargs() {
         "amdgpu.gttsize=14750"
         "split_lock_detect=off"
         "transparent_hugepage=madvise"
+        # Masque le spam console au boot — notamment le "RDSEED is not reliable on
+        # this platform; disabling." que l'APU custom du BC-250 imprime 1×/cœur très
+        # tôt (avant Plymouth). Ne SUPPRIME rien : tout reste dans `journalctl -b`,
+        # c'est juste caché de l'écran. (À combiner avec `quiet`, déjà présent.)
+        "loglevel=3"
     )
     local current_cmdline
     current_cmdline=$(cat /proc/cmdline)
