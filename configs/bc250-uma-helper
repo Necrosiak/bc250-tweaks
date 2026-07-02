@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# bc250-uma-helper — accès root minimal à la variable EFI AmdSetup (BC250-Toolkit)
+#
+# Le plugin Decky tourne en user : il ne peut ni écrire l'efivar (root) ni lever
+# le flag immutable qu'efivarfs pose sur chaque variable (chattr -i requis AVANT
+# le write, même en root). Ce helper fait les deux, et rien d'autre :
+#   read  <var> : dump brut (attributs EFI + données) sur stdout
+#   write <var> : réécrit la variable depuis stdin — refuse si la taille diffère
+# Seules les variables AmdSetup-* sous /sys/firmware/efi/efivars sont acceptées.
+set -euo pipefail
+
+EFIVARS=/sys/firmware/efi/efivars
+op="${1:-}"; var="${2:-}"
+
+case "$var" in
+    "$EFIVARS"/AmdSetup-*) ;;
+    *) echo "bc250-uma-helper: chemin refusé ($var)" >&2; exit 2 ;;
+esac
+case "$var" in
+    *..*) echo "bc250-uma-helper: chemin refusé ($var)" >&2; exit 2 ;;
+esac
+[ -f "$var" ] || { echo "bc250-uma-helper: variable absente ($var)" >&2; exit 3; }
+
+case "$op" in
+    read)
+        exec cat "$var"
+        ;;
+    write)
+        tmp=$(mktemp)
+        trap 'rm -f "$tmp"' EXIT
+        cat > "$tmp"
+        new=$(stat -c%s "$tmp"); cur=$(stat -c%s "$var")
+        if [ "$new" -ne "$cur" ]; then
+            echo "bc250-uma-helper: taille payload $new != $cur — écriture refusée" >&2
+            exit 4
+        fi
+        chattr -i "$var" 2>/dev/null || true
+        rc=0
+        cat "$tmp" > "$var" || rc=$?
+        chattr +i "$var" 2>/dev/null || true
+        exit "$rc"
+        ;;
+    *)
+        echo "usage: bc250-uma-helper read|write $EFIVARS/AmdSetup-<GUID>" >&2
+        exit 1
+        ;;
+esac

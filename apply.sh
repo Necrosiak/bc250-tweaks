@@ -380,6 +380,30 @@ apply_cu_manager() {
 }
 
 # ══════════════════════════════════════════════════════════════════════════════
+# 15. bc250-uma-helper (écriture UMA Frame Buffer via efivar AmdSetup — Toolkit)
+# ══════════════════════════════════════════════════════════════════════════════
+apply_uma_helper() {
+    install_file "$CONFIGS/bc250-uma-helper" /usr/local/bin/bc250-uma-helper 755
+}
+
+apply_uma_sudoers() {
+    local sudoers_file="/etc/sudoers.d/bc250-uma"
+    local marker="bc250-uma-sudoers-v1"
+
+    if [ -f "$sudoers_file" ] && grep -qF "$marker" "$sudoers_file" 2>/dev/null; then
+        skip "sudoers uma ($sudoers_file déjà configuré)"
+        return
+    fi
+
+    cat > "$sudoers_file" <<EOF
+# $marker — BC250-Toolkit-Decky : lecture/écriture UMA (efivar AmdSetup)
+$TARGET_USER ALL=(root) NOPASSWD: /usr/local/bin/bc250-uma-helper
+EOF
+    chmod 440 "$sudoers_file"
+    log "sudoers uma configuré : $TARGET_USER peut lancer bc250-uma-helper sans mot de passe"
+}
+
+# ══════════════════════════════════════════════════════════════════════════════
 # MAIN
 # ══════════════════════════════════════════════════════════════════════════════
 main() {
@@ -409,6 +433,8 @@ main() {
     apply_umr_sudoers
     apply_cu_boot_sudoers
     apply_cu_manager
+    apply_uma_helper
+    apply_uma_sudoers
 
     echo ""
     echo "═══════════════════════════════════════════════════"
