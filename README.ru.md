@@ -27,7 +27,7 @@ curl -sL https://raw.githubusercontent.com/Necrosiak/bc250-tweaks/main/bootstrap
 | 3 | DRI unified heap | `/etc/drirc` | GPU использует пул ОЗУ системы — предотвращает OOM VRAM в больших играх APU |
 | 4 | Задержка Pipewire | `~/.config/pipewire/pipewire.conf.d/` | quantum=512, rate=48000 |
 | 5 | Sysctl gaming | `/etc/sysctl.d/99-bc250-gaming.conf` | compaction=0, numa_balancing=0, tcp_fastopen |
-| 6 | Аргументы ядра | rpm-ostree | `amdgpu.ppfeaturemask=0xffffffff`, `amdgpu.gttsize=14750`, `split_lock_detect=off`, `transparent_hugepage=madvise` |
+| 6 | Аргументы ядра | rpm-ostree | `amdgpu.ppfeaturemask=0xffffffff`, `amdgpu.gttsize=8000`, `split_lock_detect=off`, `transparent_hugepage=madvise` |
 | 7 | Gamemode | `/usr/local/bin/` | Демон + библиотеки установлены вручную (отсутствуют в базовом образе Bazzite) |
 | 8 | Переключатель PPD | `/usr/local/bin/gamemode-{start,end}.sh` | Переключает PPD performance↔balanced через busctl при запуске игр |
 | 9 | HHD | `/etc/hhd/state.yml` | Профиль balanced в покое |
@@ -37,6 +37,7 @@ curl -sL https://raw.githubusercontent.com/Necrosiak/bc250-tweaks/main/bootstrap
 | 13 | Proton-GE | `~/.steam/steam/compatibilitytools.d/` | Установлена последняя версия GE-Proton |
 | 14 | umr sudoers | `/etc/sudoers.d/bc250-umr` | Правило NOPASSWD sudo для umr (требуется вкладкой CU плагина BC250-Toolkit) |
 | 15 | CU boot sudoers | `/etc/sudoers.d/bc250-cu-boot` | Правила NOPASSWD sudo для сохранения CU при загрузке (tee, chmod, systemctl) |
+| 16 | UMA-helper | `/usr/local/bin/bc250-uma-helper` | Root-helper (NOPASSWD через `/etc/sudoers.d/bc250-uma`) для чтения/записи EFI-переменной UMA Frame Buffer BIOS — используется секцией VRAM (UMA) плагина BC250-Toolkit |
 
 ### Рекомендуемый параметр запуска Steam
 

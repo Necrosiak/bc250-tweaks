@@ -27,7 +27,7 @@ Le script clone ce repo dans `/opt/bc250-tweaks` et installe un service systemd 
 | 3 | DRI unified heap | `/etc/drirc` | GPU utilise le pool RAM système — évite OOM VRAM sur gros jeux APU |
 | 4 | Pipewire latence | `~/.config/pipewire/pipewire.conf.d/` | quantum=512, rate=48000 |
 | 5 | Sysctl gaming | `/etc/sysctl.d/99-bc250-gaming.conf` | compaction=0, numa_balancing=0, tcp_fastopen |
-| 6 | Kargs kernel | rpm-ostree | `amdgpu.ppfeaturemask=0xffffffff`, `amdgpu.gttsize=14750`, `split_lock_detect=off`, `transparent_hugepage=madvise` |
+| 6 | Kargs kernel | rpm-ostree | `amdgpu.ppfeaturemask=0xffffffff`, `amdgpu.gttsize=8000`, `split_lock_detect=off`, `transparent_hugepage=madvise` |
 | 7 | Gamemode | `/usr/local/bin/` | Daemon + libs installés manuellement (absent de l'image Bazzite) |
 | 8 | Switch PPD | `/usr/local/bin/gamemode-{start,end}.sh` | Bascule PPD performance↔balanced via busctl au lancement des jeux |
 | 9 | HHD | `/etc/hhd/state.yml` | Profil balanced au repos |
@@ -37,6 +37,7 @@ Le script clone ce repo dans `/opt/bc250-tweaks` et installe un service systemd 
 | 13 | Proton-GE | `~/.steam/steam/compatibilitytools.d/` | Dernière version GE-Proton installée |
 | 14 | umr sudoers | `/etc/sudoers.d/bc250-umr` | Règle NOPASSWD pour umr (requis par l'onglet CU du plugin BC250-Toolkit) |
 | 15 | CU boot sudoers | `/etc/sudoers.d/bc250-cu-boot` | Règles NOPASSWD pour la persistance CU au boot (tee, chmod, systemctl) |
+| 16 | Helper UMA | `/usr/local/bin/bc250-uma-helper` | Helper root (NOPASSWD via `/etc/sudoers.d/bc250-uma`) pour lire/écrire la variable EFI UMA Frame Buffer du BIOS — utilisé par la section VRAM (UMA) du plugin BC250-Toolkit |
 
 ### Option de lancement Steam recommandée
 
