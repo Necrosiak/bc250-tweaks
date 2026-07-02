@@ -100,7 +100,10 @@ apply_kargs() {
     local need_kargs=0
     local kargs=(
         "amdgpu.ppfeaturemask=0xffffffff"
-        "amdgpu.gttsize=14750"
+        # 8000 (et non 14750) : avec UMA Frame Buffer réservée au BIOS, la RAM
+        # système tombe à ~11 Go → un gttsize=14750 dépasse la RAM et fait échouer
+        # les allocs GTT (re-crash). 4 Go VRAM + 8 Go GTT = 12 Go VRAM totale.
+        "amdgpu.gttsize=8000"
         "split_lock_detect=off"
         "transparent_hugepage=madvise"
         # Masque le spam console au boot — notamment le "RDSEED is not reliable on
@@ -110,6 +113,20 @@ apply_kargs() {
         "loglevel=3"
     )
     local current_cmdline
+    current_cmdline=$(cat /proc/cmdline)
+
+    # Auto-réparation gttsize : la vérif ci-dessous est un grep de sous-chaîne, donc
+    # si le cmdline contient une AUTRE valeur de gttsize (ex. ancien 14750, ou un
+    # doublon issu d'un re-run d'une version antérieure du script), elle n'est jamais
+    # nettoyée → kargs en conflit. On supprime ici toute occurrence de gttsize qui
+    # n'est PAS la valeur voulue avant d'ajouter la bonne.
+    local stale
+    for stale in $(grep -o 'amdgpu\.gttsize=[0-9]*' /proc/cmdline | sort -u); do
+        if [ "$stale" != "amdgpu.gttsize=8000" ]; then
+            warn "Suppression d'un gttsize périmé/dupliqué : $stale"
+            rpm-ostree kargs --delete-if-present="$stale"
+        fi
+    done
     current_cmdline=$(cat /proc/cmdline)
 
     for karg in "${kargs[@]}"; do
