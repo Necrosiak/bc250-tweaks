@@ -13,12 +13,23 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 
-# Installer git si absent (rare sur Bazzite mais possible)
+# Installer git si absent — méthode selon l'OS
 if ! command -v git &>/dev/null; then
     echo "[+] Installation de git..."
-    rpm-ostree install git
-    echo "[!] Reboot requis pour finaliser l'install de git, puis relance bootstrap.sh"
-    exit 0
+    if command -v rpm-ostree &>/dev/null && { [ -d /run/ostree ] || [ -d /ostree ]; }; then
+        rpm-ostree install git
+        echo "[!] Reboot requis pour finaliser l'install de git, puis relance bootstrap.sh"
+        exit 0
+    elif command -v dnf &>/dev/null; then
+        dnf install -y git
+    elif command -v pacman &>/dev/null; then
+        pacman -S --needed --noconfirm git
+    elif command -v apt-get &>/dev/null; then
+        apt-get update -qq && apt-get install -y git
+    else
+        echo "[!] Gestionnaire de paquets inconnu — installe git à la main puis relance."
+        exit 1
+    fi
 fi
 
 # Clone ou update

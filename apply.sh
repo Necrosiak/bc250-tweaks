@@ -23,6 +23,170 @@ need_root() {
     fi
 }
 
+# ══════════════════════════════════════════════════════════════════════════════
+# 0. Détection de l'OS — applique la BONNE méthode selon la distro
+# ══════════════════════════════════════════════════════════════════════════════
+# Le BC-250 tourne sur plusieurs OS (doc communautaire : Bazzite, SteamOS,
+# CachyOS/Arch, Fedora, Debian…). Chaque distro diffère sur : ① l'immutabilité
+# (ostree ⇒ pas d'install de paquet classique, kargs via rpm-ostree), ② le
+# gestionnaire de paquets, ③ la façon de poser des kargs kernel. On détecte tout
+# ça une fois et les fonctions apply_* s'adaptent.
+OS_ID="unknown"; OS_LIKE=""; OS_NAME="unknown"
+IS_OSTREE=0; PKG_MGR="unknown"; KARG_METHOD="manual"
+
+detect_os() {
+    if [ -r /etc/os-release ]; then
+        # shellcheck disable=SC1091
+        . /etc/os-release
+        OS_ID="${ID:-unknown}"
+        OS_LIKE="${ID_LIKE:-}"
+        OS_NAME="${PRETTY_NAME:-${NAME:-unknown}}"
+    fi
+
+    # Système immuable basé sur ostree (Bazzite, SteamOS, Silverblue/Kinoite…) :
+    # le / est en lecture seule, on ne peut pas `dnf install` sans layering+reboot.
+    if command -v rpm-ostree >/dev/null 2>&1 && { [ -d /run/ostree ] || [ -d /ostree ]; }; then
+        IS_OSTREE=1
+    fi
+
+    # Gestionnaire de paquets
+    if [ "$IS_OSTREE" -eq 1 ]; then
+        PKG_MGR="rpm-ostree"
+    elif command -v dnf >/dev/null 2>&1; then
+        PKG_MGR="dnf"
+    elif command -v pacman >/dev/null 2>&1; then
+        PKG_MGR="pacman"
+    elif command -v apt-get >/dev/null 2>&1; then
+        PKG_MGR="apt"
+    fi
+
+    # Méthode pour poser des arguments kernel (kargs) :
+    #  - ostree      → rpm-ostree kargs (persistant, atomique)
+    #  - grubby      → Fedora/RHEL mutables
+    #  - grub        → /etc/default/grub + (update-grub|grub*-mkconfig) : Arch/Debian
+    #  - manual      → bootloader non géré (systemd-boot, limine, rEFInd…) : on
+    #                  affiche les kargs à ajouter à la main plutôt que risquer un
+    #                  boot cassé.
+    if [ "$IS_OSTREE" -eq 1 ]; then
+        KARG_METHOD="rpm-ostree"
+    elif command -v grubby >/dev/null 2>&1; then
+        KARG_METHOD="grubby"
+    elif [ -f /etc/default/grub ] && \
+         { command -v update-grub >/dev/null 2>&1 || \
+           command -v grub-mkconfig >/dev/null 2>&1 || \
+           command -v grub2-mkconfig >/dev/null 2>&1; }; then
+        KARG_METHOD="grub"
+    else
+        KARG_METHOD="manual"
+    fi
+}
+
+# ── kernel args : helpers indépendants du bootloader ───────────────────────────
+_grub_cfg_path() {
+    local p
+    for p in /boot/grub2/grub.cfg /boot/grub/grub.cfg \
+             /boot/efi/EFI/*/grub.cfg /efi/EFI/*/grub.cfg; do
+        [ -f "$p" ] && { echo "$p"; return; }
+    done
+    echo /boot/grub/grub.cfg
+}
+
+_grub_regen() {
+    if command -v update-grub >/dev/null 2>&1; then
+        update-grub
+    elif command -v grub2-mkconfig >/dev/null 2>&1; then
+        grub2-mkconfig -o "$(_grub_cfg_path)"
+    elif command -v grub-mkconfig >/dev/null 2>&1; then
+        grub-mkconfig -o "$(_grub_cfg_path)"
+    fi
+}
+
+# Ajoute dans GRUB_CMDLINE_LINUX_DEFAULT de /etc/default/grub les args manquants.
+_grub_append_args() {
+    local f="/etc/default/grub"
+    [ -f "$f" ] || { warn "$f absent — kargs GRUB non posés"; return 1; }
+    grep -q '^GRUB_CMDLINE_LINUX_DEFAULT=' "$f" || \
+        echo 'GRUB_CMDLINE_LINUX_DEFAULT=""' >> "$f"
+    # awk : réécrit la ligne en ajoutant les args absents, en préservant les guillemets
+    local tmp; tmp=$(mktemp)
+    awk -v add="$*" '
+        /^GRUB_CMDLINE_LINUX_DEFAULT=/ {
+            line=$0
+            q=index(line,"\""); q2=(q ? index(substr(line,q+1),"\"")+q : 0)
+            inner=(q && q2>q ? substr(line,q+1,q2-q-1) : "")
+            n=split(inner, cur, /[ \t]+/)
+            # set existant
+            for (i=1;i<=n;i++) if (cur[i]!="") seen[cur[i]]=1
+            out=inner
+            m=split(add, a, /[ \t]+/)
+            for (i=1;i<=m;i++) if (a[i]!="" && !(a[i] in seen)) { out=(out=="" ? a[i] : out" "a[i]); seen[a[i]]=1 }
+            print "GRUB_CMDLINE_LINUX_DEFAULT=\"" out "\""
+            next
+        }
+        { print }
+    ' "$f" > "$tmp" && install -m 644 "$tmp" "$f"
+    rm -f "$tmp"
+}
+
+_grub_remove_arg() {
+    local f="/etc/default/grub" arg="$1"
+    [ -f "$f" ] || return 0
+    local tmp; tmp=$(mktemp)
+    awk -v rm="$arg" '
+        /^GRUB_CMDLINE_LINUX_DEFAULT=/ {
+            line=$0
+            q=index(line,"\""); q2=(q ? index(substr(line,q+1),"\"")+q : 0)
+            inner=(q && q2>q ? substr(line,q+1,q2-q-1) : "")
+            n=split(inner, cur, /[ \t]+/); out=""
+            for (i=1;i<=n;i++) if (cur[i]!="" && cur[i]!=rm) out=(out=="" ? cur[i] : out" "cur[i])
+            print "GRUB_CMDLINE_LINUX_DEFAULT=\"" out "\""
+            next
+        }
+        { print }
+    ' "$f" > "$tmp" && install -m 644 "$tmp" "$f"
+    rm -f "$tmp"
+}
+
+# Ajoute une liste de kargs (déjà filtrés = seulement les manquants). Renvoie 0
+# si posés, 1 si méthode manuelle (l'appelant affiche alors les instructions).
+karg_add_all() {
+    case "$KARG_METHOD" in
+        rpm-ostree)
+            local a=(); local k
+            for k in "$@"; do a+=("--append=$k"); done
+            rpm-ostree kargs "${a[@]}"
+            ;;
+        grubby)
+            grubby --update-kernel=ALL --args="$*"
+            ;;
+        grub)
+            _grub_append_args "$@" && _grub_regen
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+karg_remove() {
+    case "$KARG_METHOD" in
+        rpm-ostree) rpm-ostree kargs --delete-if-present="$1" ;;
+        grubby)     grubby --update-kernel=ALL --remove-args="$1" ;;
+        grub)       _grub_remove_arg "$1" && _grub_regen ;;
+    esac
+}
+
+# ── paquets : installe un paquet natif (hors ostree) ───────────────────────────
+pkg_install() {
+    # $@ = noms de paquet (mêmes noms sur dnf/pacman/apt pour gamemode)
+    case "$PKG_MGR" in
+        dnf)    dnf install -y "$@" ;;
+        pacman) pacman -S --needed --noconfirm "$@" ;;
+        apt)    apt-get update -qq && apt-get install -y "$@" ;;
+        *)      return 1 ;;
+    esac
+}
+
 # ── helper : copier un fichier seulement si différent ──────────────────────────
 install_file() {
     local src="$1" dst="$2" mode="${3:-644}" owner="${4:-root:root}"
@@ -94,10 +258,9 @@ apply_sysctl() {
 }
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 5. Kargs kernel (rpm-ostree)
+# 5. Kargs kernel (méthode auto : rpm-ostree / grubby / GRUB / manuel)
 # ══════════════════════════════════════════════════════════════════════════════
 apply_kargs() {
-    local need_kargs=0
     local kargs=(
         "amdgpu.ppfeaturemask=0xffffffff"
         # 8000 (et non 14750) : avec UMA Frame Buffer réservée au BIOS, la RAM
@@ -112,54 +275,88 @@ apply_kargs() {
         # c'est juste caché de l'écran. (À combiner avec `quiet`, déjà présent.)
         "loglevel=3"
     )
-    local current_cmdline
-    current_cmdline=$(cat /proc/cmdline)
 
-    # Auto-réparation gttsize : la vérif ci-dessous est un grep de sous-chaîne, donc
-    # si le cmdline contient une AUTRE valeur de gttsize (ex. ancien 14750, ou un
-    # doublon issu d'un re-run d'une version antérieure du script), elle n'est jamais
-    # nettoyée → kargs en conflit. On supprime ici toute occurrence de gttsize qui
-    # n'est PAS la valeur voulue avant d'ajouter la bonne.
+    if [ "$KARG_METHOD" = "manual" ]; then
+        warn "Bootloader non géré automatiquement (ni ostree, ni grubby, ni GRUB)."
+        warn "Ajoute ces kargs à la main dans ton bootloader (systemd-boot, limine…) :"
+        printf '        %s\n' "${kargs[@]}"
+        return
+    fi
+
+    # Auto-réparation gttsize : si le cmdline contient une AUTRE valeur de gttsize
+    # (ancien 14750, ou doublon d'un re-run), elle n'est jamais nettoyée par le
+    # grep de sous-chaîne ci-dessous → kargs en conflit. On retire d'abord toute
+    # occurrence de gttsize qui n'est PAS la valeur voulue.
     local stale
     for stale in $(grep -o 'amdgpu\.gttsize=[0-9]*' /proc/cmdline | sort -u); do
         if [ "$stale" != "amdgpu.gttsize=8000" ]; then
             warn "Suppression d'un gttsize périmé/dupliqué : $stale"
-            rpm-ostree kargs --delete-if-present="$stale"
+            karg_remove "$stale"
         fi
     done
+
+    local current_cmdline karg
     current_cmdline=$(cat /proc/cmdline)
-
+    local missing=()
     for karg in "${kargs[@]}"; do
-        if ! echo "$current_cmdline" | grep -q "$karg"; then
-            need_kargs=1
-            break
-        fi
+        echo "$current_cmdline" | grep -q -- "$karg" || missing+=("$karg")
     done
 
-    if [ "$need_kargs" -eq 1 ]; then
-        local args=()
-        for karg in "${kargs[@]}"; do
-            if ! echo "$current_cmdline" | grep -q "$karg"; then
-                args+=("--append=$karg")
-            fi
-        done
-        rpm-ostree kargs "${args[@]}"
-        warn "Kargs ajoutés — un reboot est nécessaire pour les activer."
-    else
+    if [ "${#missing[@]}" -eq 0 ]; then
         skip "Kargs kernel (déjà dans /proc/cmdline)"
+        return
+    fi
+
+    if karg_add_all "${missing[@]}"; then
+        log "Kargs posés via ${KARG_METHOD} : ${missing[*]}"
+        warn "Un reboot est nécessaire pour les activer."
+    else
+        warn "Échec de la pose des kargs (méthode ${KARG_METHOD}) — à ajouter à la main :"
+        printf '        %s\n' "${missing[@]}"
     fi
 }
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 6. Gamemode (binaires dans /usr/local)
+# 6. Gamemode
+#   - OS mutable (Arch/CachyOS/Fedora/Debian) : installé nativement par le
+#     gestionnaire de paquets, gamemoded arrive dans /usr/bin.
+#   - OS immuable (Bazzite/SteamOS) : / est en lecture seule → on extrait le RPM
+#     dans /usr/local (le seul chemin inscriptible et dans le PATH).
+# GAMEMODED_BIN pointe ensuite sur le binaire réel pour le service systemd.
 # ══════════════════════════════════════════════════════════════════════════════
+GAMEMODED_BIN=""
+
 apply_gamemode() {
+    # Déjà présent (natif ou extrait) ?
+    if command -v gamemoded >/dev/null 2>&1; then
+        GAMEMODED_BIN=$(command -v gamemoded)
+        skip "Gamemode ($GAMEMODED_BIN existe)"
+        return
+    fi
     if [ -x /usr/local/bin/gamemoded ]; then
+        GAMEMODED_BIN=/usr/local/bin/gamemoded
         skip "Gamemode (/usr/local/bin/gamemoded existe)"
         return
     fi
 
-    log "Installation de gamemode depuis DNF (extraction manuelle)..."
+    # OS mutable : installation native (propre, mises à jour gérées par la distro).
+    if [ "$IS_OSTREE" -eq 0 ] && [ "$PKG_MGR" != "unknown" ]; then
+        log "Installation de gamemode via $PKG_MGR..."
+        if pkg_install gamemode && command -v gamemoded >/dev/null 2>&1; then
+            GAMEMODED_BIN=$(command -v gamemoded)
+            log "Gamemode installé ($GAMEMODED_BIN)"
+            return
+        fi
+        warn "Installation native de gamemode échouée — tentative d'extraction RPM..."
+    fi
+
+    # OS immuable (ou fallback) : extraction manuelle d'un RPM dans /usr/local.
+    # Nécessite dnf (présent sur Bazzite/Fedora). Sinon on abandonne proprement.
+    if ! command -v dnf >/dev/null 2>&1; then
+        warn "gamemode non installable (ni paquet natif, ni dnf pour extraction) — ignoré."
+        return
+    fi
+    log "Installation de gamemode depuis DNF (extraction manuelle dans /usr/local)..."
     local tmpdir
     tmpdir=$(mktemp -d)
     trap 'rm -rf "$tmpdir"' RETURN
@@ -208,6 +405,7 @@ apply_gamemode() {
     echo "/usr/local/lib64" > /etc/ld.so.conf.d/usrlocal.conf
     ldconfig
 
+    [ -x /usr/local/bin/gamemoded ] && GAMEMODED_BIN=/usr/local/bin/gamemoded
     log "Gamemode installé dans /usr/local"
 }
 
@@ -224,11 +422,25 @@ apply_gamemode_config() {
 # 8. Service systemd user : gamemoded
 # ══════════════════════════════════════════════════════════════════════════════
 apply_gamemoded_service() {
+    # Sans binaire gamemoded (install échouée) : pas de service.
+    local bin="${GAMEMODED_BIN:-}"
+    [ -n "$bin" ] || bin=$(command -v gamemoded 2>/dev/null || true)
+    [ -n "$bin" ] || { [ -x /usr/local/bin/gamemoded ] && bin=/usr/local/bin/gamemoded; }
+    if [ -z "$bin" ]; then
+        warn "gamemoded introuvable — service non installé."
+        return
+    fi
+
     local dst="$TARGET_HOME/.config/systemd/user/gamemoded.service"
-    install_user_file "$CONFIGS/gamemoded.service" "$dst"
+    # Le service livré vise /usr/local/bin/gamemoded (cas ostree) ; sur OS mutable
+    # le binaire est dans /usr/bin → on réécrit l'ExecStart vers le chemin réel.
+    local tmp; tmp=$(mktemp)
+    sed "s#^ExecStart=.*#ExecStart=$bin#" "$CONFIGS/gamemoded.service" > "$tmp"
+    install_user_file "$tmp" "$dst"
+    rm -f "$tmp"
     sudo -u "$TARGET_USER" XDG_RUNTIME_DIR="/run/user/$(id -u "$TARGET_USER")" \
         systemctl --user enable --now gamemoded.service 2>/dev/null || true
-    log "Service gamemoded activé"
+    log "Service gamemoded activé ($bin)"
 }
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -408,13 +620,23 @@ EOF
 # ══════════════════════════════════════════════════════════════════════════════
 main() {
     need_root
+    detect_os
 
     echo ""
     echo "═══════════════════════════════════════════════════"
     echo "  BC-250 Tweaks — apply.sh"
     echo "  Utilisateur cible : $TARGET_USER ($TARGET_HOME)"
+    echo "  OS : $OS_NAME (id=$OS_ID$([ -n "$OS_LIKE" ] && echo ", like=$OS_LIKE"))"
+    echo "  Immuable : $([ "$IS_OSTREE" -eq 1 ] && echo oui || echo non)"\
+"  ·  Paquets : $PKG_MGR  ·  Kargs : $KARG_METHOD"
     echo "═══════════════════════════════════════════════════"
     echo ""
+
+    if [ "$IS_OSTREE" -eq 0 ] && [[ "$OS_ID" != "bazzite" && "$OS_LIKE" != *fedora* ]]; then
+        warn "OS hors Bazzite/SteamOS : support best-effort (validé par les retours"
+        warn "de la communauté). Signale tout souci : github.com/Necrosiak/bc250-tweaks/issues"
+        echo ""
+    fi
 
     apply_tuned
     apply_env_gaming
