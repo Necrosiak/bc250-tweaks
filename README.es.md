@@ -81,3 +81,9 @@ sudo /opt/bc250-tweaks/update.sh
 - [BC250 Toolkit (plugin DeckyLoader)](https://github.com/Necrosiak/bc250-toolkit-decky) — base de datos de juegos de la comunidad, aplicar ajustes desde Steam
 - [AMD BC-250 Docs](https://elektricm.github.io/amd-bc250-docs) — wiki comunitaria BC-250 Linux
 - [bc250.info](https://bc250.info)
+
+---
+
+## 🐧 Compatibilidad
+
+Trabajamos activamente para que estos tweaks funcionen en **todos los sistemas operativos documentados para la BC-250** ([documentación comunitaria](https://elektricm.github.io/amd-bc250-docs)) — Bazzite, SteamOS, CachyOS/Arch, Fedora… El objetivo: **detección automática del SO** para que `apply.sh` use el método correcto (argumentos del kernel, paquetes, servicios) en tu distribución.
