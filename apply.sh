@@ -616,6 +616,67 @@ EOF
 }
 
 # ══════════════════════════════════════════════════════════════════════════════
+# 16. DeckyLoader + nos plugins (setup complet du BC-250 en une commande)
+# ══════════════════════════════════════════════════════════════════════════════
+# Installe DeckyLoader s'il manque, puis nos plugins (BC250-Toolkit, SkullKey,
+# Steamcord) depuis leurs releases GitHub. UNE SEULE FOIS : si un plugin est
+# déjà présent on ne touche à rien (l'auto-update de Decky, basé sur les
+# releases, prend le relais — on ne veut pas réécrire/écraser à chaque boot).
+apply_deckyloader() {
+    if systemctl is-active --quiet plugin_loader 2>/dev/null \
+            || [ -d "$TARGET_HOME/homebrew/services" ]; then
+        skip "DeckyLoader (déjà installé)"
+        return
+    fi
+    log "Installation de DeckyLoader…"
+    # Installeur officiel : installe dans ~/homebrew et pose plugin_loader.service.
+    # apply.sh tourne en root → on fixe HOME sur l'utilisateur cible.
+    if HOME="$TARGET_HOME" curl -fsSL \
+        "https://github.com/SteamDeckHomebrew/decky-loader/raw/main/dist/install_release.sh" \
+        | HOME="$TARGET_HOME" sh 2>&1 | sed 's/^/    /'; then
+        [ -d "$TARGET_HOME/homebrew" ] && chown -R "$TARGET_USER:$TARGET_USER" \
+            "$TARGET_HOME/homebrew" 2>/dev/null || true
+        log "DeckyLoader installé"
+    else
+        warn "DeckyLoader : installation échouée (pas de réseau ?)"
+    fi
+}
+
+_install_plugin() {
+    local name="$1" repo="$2" zip="$3"
+    local dst="$TARGET_HOME/homebrew/plugins"
+    if [ ! -d "$dst" ]; then
+        skip "Plugin $name (DeckyLoader pas prêt)"
+        return
+    fi
+    if [ -d "$dst/$name" ]; then
+        skip "Plugin $name (déjà présent — l'auto-update Decky s'en charge)"
+        return
+    fi
+    local tmp; tmp=$(mktemp -d)
+    local url="https://github.com/${repo}/releases/latest/download/${zip}"
+    if curl -fsSL "$url" -o "$tmp/$zip" 2>/dev/null \
+            && unzip -q "$tmp/$zip" -d "$tmp/x" 2>/dev/null; then
+        local inner
+        inner=$(find "$tmp/x" -maxdepth 1 -mindepth 1 -type d | head -1)
+        [ -n "$inner" ] || inner="$tmp/x"
+        cp -r "$inner" "$dst/$name"
+        chown -R "$TARGET_USER:$TARGET_USER" "$dst/$name"
+        find "$dst/$name" \( -name '*.sh' -o -name '*.py' \) -exec chmod a+rx {} + 2>/dev/null || true
+        log "Plugin installé : $name"
+    else
+        warn "Plugin $name : téléchargement/extraction échoué (pas de réseau ?)"
+    fi
+    rm -rf "$tmp"
+}
+
+apply_our_plugins() {
+    _install_plugin "BC250-Toolkit" "Necrosiak/bc250-toolkit-decky" "BC250-Toolkit.zip"
+    _install_plugin "SkullKey"      "Necrosiak/SkullKey"            "SkullKey.zip"
+    _install_plugin "Steamcord"     "Necrosiak/Steamcord"          "Steamcord.zip"
+}
+
+# ══════════════════════════════════════════════════════════════════════════════
 # MAIN
 # ══════════════════════════════════════════════════════════════════════════════
 main() {
@@ -657,6 +718,8 @@ main() {
     apply_cu_manager
     apply_uma_helper
     apply_uma_sudoers
+    apply_deckyloader
+    apply_our_plugins
 
     echo ""
     echo "═══════════════════════════════════════════════════"

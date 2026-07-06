@@ -55,5 +55,6 @@ echo "[+] Premier apply..."
 
 echo ""
 echo "Bootstrap terminé."
-echo "Le service bc250-tweaks s'exécutera automatiquement à chaque boot."
+echo "Tweaks système + DeckyLoader + plugins (BC250-Toolkit, SkullKey, Steamcord)"
+echo "installés — setup BC-250 complet. Le service bc250-tweaks se relance à chaque boot."
 echo "Logs : journalctl -u bc250-tweaks -f  ou  tail -f /var/log/bc250-tweaks.log"
