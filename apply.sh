@@ -676,6 +676,12 @@ apply_our_plugins() {
     _install_plugin "Steamcord"     "Necrosiak/Steamcord"          "Steamcord.zip"
 }
 
+# ── commande « bc250-status » : résumé santé (temps/ventilo/UMA/tweaks/plugins) ─
+apply_status_command() {
+    [ -f "$REPO_DIR/status.sh" ] && \
+        install_file "$REPO_DIR/status.sh" /usr/local/bin/bc250-status 755
+}
+
 # ══════════════════════════════════════════════════════════════════════════════
 # MAIN
 # ══════════════════════════════════════════════════════════════════════════════
@@ -720,10 +726,11 @@ main() {
     apply_uma_sudoers
     apply_deckyloader
     apply_our_plugins
+    apply_status_command
 
     echo ""
     echo "═══════════════════════════════════════════════════"
-    echo "  Terminé."
+    echo "  Terminé.  ${TERM:+Tape }bc250-status pour un résumé santé."
     echo "  Si des kargs ont été ajoutés, redémarre la machine."
     echo "═══════════════════════════════════════════════════"
 }
