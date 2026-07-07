@@ -14,6 +14,8 @@ Sostituzione manuale del patcher image di vietsman, non più mantenuto per Bazzi
 curl -sL https://raw.githubusercontent.com/Necrosiak/bc250-tweaks/main/bootstrap.sh | sudo bash
 ```
 
+Questo singolo comando installa tutto per un BC-250 nuovo: i tweak di sistema **più DeckyLoader e i nostri plugin** (BC250-Toolkit, SkullKey, Steamcord). Poi esegui **`bc250-status`** quando vuoi per un riepilogo dello stato (temps, ventola, VRAM/UMA, RAM, tweak attivi, Proton-GE, plugin).
+
 Lo script clona questo repo in `/opt/bc250-tweaks` e installa un servizio systemd che **si aggiorna automaticamente ad ogni avvio** (git pull + apply).
 
 ---

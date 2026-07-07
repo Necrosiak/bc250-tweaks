@@ -14,6 +14,8 @@ Manual replacement for vietsman's image patcher, which is no longer maintained f
 curl -sL https://raw.githubusercontent.com/Necrosiak/bc250-tweaks/main/bootstrap.sh | sudo bash
 ```
 
+This one command installs everything for a fresh BC-250: the system tweaks **plus DeckyLoader and our plugins** ([BC250-Toolkit](https://github.com/Necrosiak/bc250-toolkit-decky), [SkullKey](https://github.com/Necrosiak/SkullKey), [Steamcord](https://github.com/Necrosiak/Steamcord)). Afterwards, run **`bc250-status`** anytime for a one-glance health report (temps, fan, VRAM/UMA, RAM, active tweaks, Proton-GE, plugins).
+
 The script clones this repo to `/opt/bc250-tweaks` and installs a systemd service that **auto-updates on every boot** (git pull + apply).
 
 ---

@@ -14,6 +14,8 @@ Handmatige vervanging voor de image-patcher van vietsman, die niet meer wordt on
 curl -sL https://raw.githubusercontent.com/Necrosiak/bc250-tweaks/main/bootstrap.sh | sudo bash
 ```
 
+Deze ene opdracht installeert alles voor een verse BC-250: de systeemtweaks **plus DeckyLoader en onze plugins** (BC250-Toolkit, SkullKey, Steamcord). Voer daarna op elk moment **`bc250-status`** uit voor een statusoverzicht (temps, ventilator, VRAM/UMA, RAM, actieve tweaks, Proton-GE, plugins).
+
 Het script kloont deze repo naar `/opt/bc250-tweaks` en installeert een systemd-service die **bij elke boot automatisch bijwerkt** (git pull + apply).
 
 ---

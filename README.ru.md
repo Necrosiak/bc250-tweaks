@@ -14,6 +14,8 @@
 curl -sL https://raw.githubusercontent.com/Necrosiak/bc250-tweaks/main/bootstrap.sh | sudo bash
 ```
 
+Эта одна команда устанавливает всё для нового BC-250: системные твики **плюс DeckyLoader и наши плагины** (BC250-Toolkit, SkullKey, Steamcord). Затем в любой момент запустите **`bc250-status`** для сводки состояния (темп., вентилятор, VRAM/UMA, RAM, активные твики, Proton-GE, плагины).
+
 Скрипт клонирует этот репо в `/opt/bc250-tweaks` и устанавливает службу systemd, которая **автоматически обновляется при каждой загрузке** (git pull + apply).
 
 ---

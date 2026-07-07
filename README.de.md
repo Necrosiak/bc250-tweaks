@@ -14,6 +14,8 @@ Manueller Ersatz für vietsmanns Image-Patcher, der für Bazzite 43+ nicht mehr 
 curl -sL https://raw.githubusercontent.com/Necrosiak/bc250-tweaks/main/bootstrap.sh | sudo bash
 ```
 
+Dieser eine Befehl installiert alles für einen frischen BC-250: die System-Tweaks **plus DeckyLoader und unsere Plugins** (BC250-Toolkit, SkullKey, Steamcord). Danach jederzeit **`bc250-status`** ausführen für einen Gesundheits-Überblick (Temps, Lüfter, VRAM/UMA, RAM, aktive Tweaks, Proton-GE, Plugins).
+
 Das Skript klont dieses Repository nach `/opt/bc250-tweaks` und installiert einen systemd-Dienst, der **bei jedem Boot automatisch aktualisiert** (git pull + apply).
 
 ---
