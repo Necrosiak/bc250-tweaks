@@ -4,6 +4,8 @@
 
 Gaming-optimalisaties voor de **ASRock BC-250** (AMD Ryzen Embedded V2000 / Cyan Skillfish GPU) onder **Bazzite Linux**.
 
+**Bazzite is het primaire, volledig geteste doel.** Het script **detecteert daarnaast automatisch je besturingssysteem en bootloader** (pakketbeheerder en kernel-args-methode — rpm-ostree, GRUB, Limine, systemd-boot of rEFInd), en draait dus best-effort op de andere voor de BC-250 gedocumenteerde systemen (SteamOS/HoloISO, CachyOS/Arch, Fedora, Debian…). Ondersteuning buiten Bazzite wordt gevalideerd via meldingen uit de community — [open een issue](https://github.com/Necrosiak/bc250-tweaks/issues) als er iets misgaat op jouw distro.
+
 Handmatige vervanging voor de image-patcher van vietsman, die niet meer wordt onderhouden voor Bazzite 43+.
 
 ---
