@@ -61,24 +61,75 @@ detect_os() {
     fi
 
     # Méthode pour poser des arguments kernel (kargs) :
-    #  - ostree      → rpm-ostree kargs (persistant, atomique)
-    #  - grubby      → Fedora/RHEL mutables
-    #  - grub        → /etc/default/grub + (update-grub|grub*-mkconfig) : Arch/Debian
-    #  - manual      → bootloader non géré (systemd-boot, limine, rEFInd…) : on
-    #                  affiche les kargs à ajouter à la main plutôt que risquer un
-    #                  boot cassé.
+    #  - ostree         → rpm-ostree kargs (persistant, atomique)
+    #  - grubby         → Fedora/RHEL mutables (gère aussi les entrées BLS)
+    #  - limine         → CachyOS Limine : /etc/default/limine + limine-mkinitcpio
+    #  - sdboot-manage  → CachyOS systemd-boot : LINUX_OPTIONS + sdboot-manage gen
+    #  - sdboot-entries → systemd-boot sans outil : édition des options dans
+    #                     loader/entries/*.conf (backup .bc250.bak, effet immédiat ;
+    #                     ⚠ un hook de MAJ kernel peut régénérer les entrées)
+    #  - grub           → /etc/default/grub + (update-grub|grub*-mkconfig)
+    #  - refind         → /boot/refind_linux.conf (1re ligne = options par défaut)
+    #  - manual         → bootloader non identifié : on affiche les kargs à ajouter
+    #                     à la main plutôt que risquer un boot cassé.
+    # Les chemins vérifiant l'install RÉELLE dans l'ESP (limine/systemd-boot)
+    # passent avant grub, dont la détection ne repose que sur la présence de
+    # /etc/default/grub (souvent un reste de paquet non utilisé).
     if [ "$IS_OSTREE" -eq 1 ]; then
         KARG_METHOD="rpm-ostree"
     elif command -v grubby >/dev/null 2>&1; then
         KARG_METHOD="grubby"
+    elif [ -f "$LIMINE_DEFAULT" ] && command -v limine-mkinitcpio >/dev/null 2>&1; then
+        KARG_METHOD="limine"
+    elif command -v sdboot-manage >/dev/null 2>&1 && [ -f "$SDBOOT_CONF" ]; then
+        KARG_METHOD="sdboot-manage"
+    elif _sdboot_installed && [ -n "$(_sdboot_entries)" ]; then
+        KARG_METHOD="sdboot-entries"
     elif [ -f /etc/default/grub ] && \
          { command -v update-grub >/dev/null 2>&1 || \
            command -v grub-mkconfig >/dev/null 2>&1 || \
            command -v grub2-mkconfig >/dev/null 2>&1; }; then
         KARG_METHOD="grub"
+    elif [ -f "$REFIND_CONF" ]; then
+        KARG_METHOD="refind"
     else
         KARG_METHOD="manual"
     fi
+}
+
+# Chemins surchargeables (tests sandbox : pointer vers une arborescence factice)
+SDBOOT_CONF="${SDBOOT_CONF:-/etc/sdboot-manage.conf}"
+LIMINE_DEFAULT="${LIMINE_DEFAULT:-/etc/default/limine}"
+REFIND_CONF="${REFIND_CONF:-/boot/refind_linux.conf}"
+SDBOOT_ENTRY_DIRS="${SDBOOT_ENTRY_DIRS:-/boot/loader/entries /efi/loader/entries /boot/efi/loader/entries}"
+
+_sdboot_installed() {
+    if command -v bootctl >/dev/null 2>&1; then
+        bootctl is-installed >/dev/null 2>&1 && return 0
+    fi
+    local d
+    for d in $SDBOOT_ENTRY_DIRS; do [ -d "$d" ] && return 0; done
+    return 1
+}
+
+# Entrées systemd-boot éditables (on ne touche pas aux entrées fallback)
+_sdboot_entries() {
+    local d f
+    for d in $SDBOOT_ENTRY_DIRS; do
+        [ -d "$d" ] || continue
+        for f in "$d"/*.conf; do
+            [ -f "$f" ] || continue
+            case "$(basename "$f")" in *fallback*) continue ;; esac
+            echo "$f"
+        done
+        return  # un seul répertoire d'entrées actif
+    done
+}
+
+# Backup one-shot avant première modification d'un fichier bootloader
+_boot_backup() {
+    local f="$1"
+    [ -f "$f" ] && [ ! -f "$f.bc250.bak" ] && cp -p "$f" "$f.bc250.bak" || true
 }
 
 # ── kernel args : helpers indépendants du bootloader ───────────────────────────
@@ -101,16 +152,19 @@ _grub_regen() {
     fi
 }
 
-# Ajoute dans GRUB_CMDLINE_LINUX_DEFAULT de /etc/default/grub les args manquants.
-_grub_append_args() {
-    local f="/etc/default/grub"
-    [ -f "$f" ] || { warn "$f absent — kargs GRUB non posés"; return 1; }
-    grep -q '^GRUB_CMDLINE_LINUX_DEFAULT=' "$f" || \
-        echo 'GRUB_CMDLINE_LINUX_DEFAULT=""' >> "$f"
+# ── helpers génériques : VAR="a b c" dans un fichier shell ─────────────────────
+# Ajoute les args manquants dans la valeur entre guillemets de <var> dans <file>
+# (crée la ligne si absente), en préservant le reste du fichier. Sert à GRUB
+# (GRUB_CMDLINE_LINUX_DEFAULT) et à sdboot-manage (LINUX_OPTIONS).
+_shvar_append_args() {
+    local f="$1" var="$2"; shift 2
+    [ -f "$f" ] || { warn "$f absent — kargs non posés"; return 1; }
+    _boot_backup "$f"
+    grep -q "^${var}=" "$f" || echo "${var}=\"\"" >> "$f"
     # awk : réécrit la ligne en ajoutant les args absents, en préservant les guillemets
     local tmp; tmp=$(mktemp)
-    awk -v add="$*" '
-        /^GRUB_CMDLINE_LINUX_DEFAULT=/ {
+    awk -v add="$*" -v var="$var" '
+        index($0, var"=") == 1 {
             line=$0
             q=index(line,"\""); q2=(q ? index(substr(line,q+1),"\"")+q : 0)
             inner=(q && q2>q ? substr(line,q+1,q2-q-1) : "")
@@ -120,7 +174,7 @@ _grub_append_args() {
             out=inner
             m=split(add, a, /[ \t]+/)
             for (i=1;i<=m;i++) if (a[i]!="" && !(a[i] in seen)) { out=(out=="" ? a[i] : out" "a[i]); seen[a[i]]=1 }
-            print "GRUB_CMDLINE_LINUX_DEFAULT=\"" out "\""
+            print var"=\"" out "\""
             next
         }
         { print }
@@ -128,19 +182,179 @@ _grub_append_args() {
     rm -f "$tmp"
 }
 
-_grub_remove_arg() {
-    local f="/etc/default/grub" arg="$1"
+_shvar_remove_arg() {
+    local f="$1" var="$2" arg="$3"
     [ -f "$f" ] || return 0
+    _boot_backup "$f"
     local tmp; tmp=$(mktemp)
-    awk -v rm="$arg" '
-        /^GRUB_CMDLINE_LINUX_DEFAULT=/ {
+    awk -v rm="$arg" -v var="$var" '
+        index($0, var"=") == 1 {
             line=$0
             q=index(line,"\""); q2=(q ? index(substr(line,q+1),"\"")+q : 0)
             inner=(q && q2>q ? substr(line,q+1,q2-q-1) : "")
             n=split(inner, cur, /[ \t]+/); out=""
             for (i=1;i<=n;i++) if (cur[i]!="" && cur[i]!=rm) out=(out=="" ? cur[i] : out" "cur[i])
-            print "GRUB_CMDLINE_LINUX_DEFAULT=\"" out "\""
+            print var"=\"" out "\""
             next
+        }
+        { print }
+    ' "$f" > "$tmp" && install -m 644 "$tmp" "$f"
+    rm -f "$tmp"
+}
+
+_grub_append_args() { _shvar_append_args /etc/default/grub GRUB_CMDLINE_LINUX_DEFAULT "$@"; }
+_grub_remove_arg()  { _shvar_remove_arg  /etc/default/grub GRUB_CMDLINE_LINUX_DEFAULT "$1"; }
+
+# ── systemd-boot sans sdboot-manage : édition directe des entrées ──────────────
+# Ajoute les args manquants sur la (1re) ligne `options` de chaque entrée non-
+# fallback. Effet immédiat (systemd-boot relit les entrées à chaque boot).
+_sdboot_entries_append_args() {
+    local f tmp changed=1
+    for f in $(_sdboot_entries); do
+        _boot_backup "$f"
+        tmp=$(mktemp)
+        awk -v add="$*" '
+            /^options([ \t]|$)/ && !done {
+                done=1
+                inner=$0; sub(/^options[ \t]*/, "", inner)
+                n=split(inner, cur, /[ \t]+/)
+                for (i=1;i<=n;i++) if (cur[i]!="") seen[cur[i]]=1
+                out=inner
+                m=split(add, a, /[ \t]+/)
+                for (i=1;i<=m;i++) if (a[i]!="" && !(a[i] in seen)) { out=(out=="" ? a[i] : out" "a[i]); seen[a[i]]=1 }
+                print "options " out
+                next
+            }
+            { print }
+            END { if (!done) print "options " add }
+        ' "$f" > "$tmp" && install -m 644 "$tmp" "$f" && changed=0
+        rm -f "$tmp"
+    done
+    return $changed
+}
+
+_sdboot_entries_remove_arg() {
+    local f tmp arg="$1"
+    for f in $(_sdboot_entries); do
+        _boot_backup "$f"
+        tmp=$(mktemp)
+        awk -v rm="$arg" '
+            /^options([ \t]|$)/ {
+                inner=$0; sub(/^options[ \t]*/, "", inner)
+                n=split(inner, cur, /[ \t]+/); out=""
+                for (i=1;i<=n;i++) if (cur[i]!="" && cur[i]!=rm) out=(out=="" ? cur[i] : out" "cur[i])
+                print "options " out
+                next
+            }
+            { print }
+        ' "$f" > "$tmp" && install -m 644 "$tmp" "$f"
+        rm -f "$tmp"
+    done
+}
+
+# ── Limine (CachyOS) : /etc/default/limine + limine-mkinitcpio ─────────────────
+# On n'édite PAS les lignes KERNEL_CMDLINE existantes de l'utilisateur : on gère
+# NOTRE ligne additive `KERNEL_CMDLINE[default]+=" …"` repérée par un marqueur,
+# fusionnée/réécrite à chaque run (idempotent).
+_LIMINE_MARK="# bc250-tweaks kargs (géré par apply.sh)"
+
+_limine_our_args() {
+    [ -f "$LIMINE_DEFAULT" ] || return 0
+    grep -A1 -F "$_LIMINE_MARK" "$LIMINE_DEFAULT" 2>/dev/null \
+        | sed -n 's/^KERNEL_CMDLINE\[default\]+=" \(.*\)"$/\1/p'
+}
+
+_limine_write_line() {
+    # $* = liste FINALE d'args de notre ligne (vide = retirer la ligne)
+    local f="$LIMINE_DEFAULT" tmp; tmp=$(mktemp)
+    _boot_backup "$f"
+    grep -v -F "$_LIMINE_MARK" "$f" 2>/dev/null \
+        | grep -v '^KERNEL_CMDLINE\[default\]+=" .*"[ \t]*$' > "$tmp" || true
+    if [ -n "$*" ]; then
+        printf '%s\nKERNEL_CMDLINE[default]+=" %s"\n' "$_LIMINE_MARK" "$*" >> "$tmp"
+    fi
+    install -m 644 "$tmp" "$f"
+    rm -f "$tmp"
+}
+
+_limine_append_args() {
+    [ -f "$LIMINE_DEFAULT" ] || { warn "$LIMINE_DEFAULT absent"; return 1; }
+    local cur out a
+    cur=$(_limine_our_args)
+    out="$cur"
+    for a in "$@"; do
+        case " $out " in *" $a "*) ;; *) out="${out:+$out }$a" ;; esac
+    done
+    [ "$out" = "$cur" ] && return 0
+    _limine_write_line $out
+    limine-mkinitcpio >/dev/null 2>&1 || warn "limine-mkinitcpio a échoué — relance-le à la main"
+}
+
+_limine_remove_arg() {
+    local arg="$1" cur out a
+    cur=$(_limine_our_args)
+    out=""
+    for a in $cur; do [ "$a" = "$arg" ] || out="${out:+$out }$a"; done
+    if [ "$out" != "$cur" ]; then
+        _limine_write_line $out
+        limine-mkinitcpio >/dev/null 2>&1 || true
+    elif [ -f "$LIMINE_DEFAULT" ] && grep -q -- "$arg" "$LIMINE_DEFAULT" 2>/dev/null; then
+        warn "$arg présent dans $LIMINE_DEFAULT hors de notre ligne — retire-le à la main"
+    fi
+}
+
+# ── rEFInd : 1re ligne de refind_linux.conf = options de boot par défaut ───────
+_refind_append_args() {
+    local f="$REFIND_CONF"
+    [ -f "$f" ] || { warn "$f absent"; return 1; }
+    _boot_backup "$f"
+    local tmp; tmp=$(mktemp)
+    # "label"  "options" → ajoute les args absents dans le 2e champ quoté.
+    # Parsing par index() (portable mawk/busybox — pas de match() à 3 args gawk).
+    awk -v add="$*" '
+        NR==1 && /^[ \t]*"/ {
+            line=$0
+            q1=index(line,"\"")                                  # ouvre label
+            r=substr(line,q1+1); q2=index(r,"\"")                # ferme label
+            r2=substr(r,q2+1);   q3=index(r2,"\"")               # ouvre options
+            r3=substr(r2,q3+1);  q4=index(r3,"\"")               # ferme options
+            if (q1 && q2 && q3 && q4) {
+                head=substr(line,1,q1+q2+q3)                     # jusqu à la " ouvrante des options incluse
+                inner=substr(r3,1,q4-1)
+                n=split(inner, cur, /[ \t]+/)
+                for (i=1;i<=n;i++) if (cur[i]!="") seen[cur[i]]=1
+                out=inner
+                m=split(add, a, /[ \t]+/)
+                for (i=1;i<=m;i++) if (a[i]!="" && !(a[i] in seen)) { out=(out=="" ? a[i] : out" "a[i]); seen[a[i]]=1 }
+                print head out "\""
+                next
+            }
+        }
+        { print }
+    ' "$f" > "$tmp" && install -m 644 "$tmp" "$f"
+    rm -f "$tmp"
+}
+
+_refind_remove_arg() {
+    local f="$REFIND_CONF" arg="$1"
+    [ -f "$f" ] || return 0
+    _boot_backup "$f"
+    local tmp; tmp=$(mktemp)
+    awk -v rm="$arg" '
+        NR==1 && /^[ \t]*"/ {
+            line=$0
+            q1=index(line,"\"")
+            r=substr(line,q1+1); q2=index(r,"\"")
+            r2=substr(r,q2+1);   q3=index(r2,"\"")
+            r3=substr(r2,q3+1);  q4=index(r3,"\"")
+            if (q1 && q2 && q3 && q4) {
+                head=substr(line,1,q1+q2+q3)
+                inner=substr(r3,1,q4-1)
+                n=split(inner, cur, /[ \t]+/); out=""
+                for (i=1;i<=n;i++) if (cur[i]!="" && cur[i]!=rm) out=(out=="" ? cur[i] : out" "cur[i])
+                print head out "\""
+                next
+            }
         }
         { print }
     ' "$f" > "$tmp" && install -m 644 "$tmp" "$f"
@@ -162,6 +376,18 @@ karg_add_all() {
         grub)
             _grub_append_args "$@" && _grub_regen
             ;;
+        limine)
+            _limine_append_args "$@"
+            ;;
+        sdboot-manage)
+            _shvar_append_args "$SDBOOT_CONF" LINUX_OPTIONS "$@" && sdboot-manage gen
+            ;;
+        sdboot-entries)
+            _sdboot_entries_append_args "$@"
+            ;;
+        refind)
+            _refind_append_args "$@"
+            ;;
         *)
             return 1
             ;;
@@ -170,9 +396,13 @@ karg_add_all() {
 
 karg_remove() {
     case "$KARG_METHOD" in
-        rpm-ostree) rpm-ostree kargs --delete-if-present="$1" ;;
-        grubby)     grubby --update-kernel=ALL --remove-args="$1" ;;
-        grub)       _grub_remove_arg "$1" && _grub_regen ;;
+        rpm-ostree)     rpm-ostree kargs --delete-if-present="$1" ;;
+        grubby)         grubby --update-kernel=ALL --remove-args="$1" ;;
+        grub)           _grub_remove_arg "$1" && _grub_regen ;;
+        limine)         _limine_remove_arg "$1" ;;
+        sdboot-manage)  _shvar_remove_arg "$SDBOOT_CONF" LINUX_OPTIONS "$1" && sdboot-manage gen ;;
+        sdboot-entries) _sdboot_entries_remove_arg "$1" ;;
+        refind)         _refind_remove_arg "$1" ;;
     esac
 }
 
@@ -277,8 +507,8 @@ apply_kargs() {
     )
 
     if [ "$KARG_METHOD" = "manual" ]; then
-        warn "Bootloader non géré automatiquement (ni ostree, ni grubby, ni GRUB)."
-        warn "Ajoute ces kargs à la main dans ton bootloader (systemd-boot, limine…) :"
+        warn "Bootloader non reconnu (ni ostree, grubby, GRUB, Limine, systemd-boot, rEFInd)."
+        warn "Ajoute ces kargs à la main dans la config de ton bootloader :"
         printf '        %s\n' "${kargs[@]}"
         return
     fi

@@ -29,7 +29,7 @@ curl -sL https://raw.githubusercontent.com/Necrosiak/bc250-tweaks/main/bootstrap
 | 3 | DRI unified heap | `/etc/drirc` | GPU использует пул ОЗУ системы — предотвращает OOM VRAM в больших играх APU |
 | 4 | Задержка Pipewire | `~/.config/pipewire/pipewire.conf.d/` | quantum=512, rate=48000 |
 | 5 | Sysctl gaming | `/etc/sysctl.d/99-bc250-gaming.conf` | compaction=0, numa_balancing=0, tcp_fastopen |
-| 6 | Аргументы ядра | rpm-ostree | `amdgpu.ppfeaturemask=0xffffffff`, `amdgpu.gttsize=8000`, `split_lock_detect=off`, `transparent_hugepage=madvise` |
+| 6 | Аргументы ядра | auto (rpm-ostree / grubby / GRUB / Limine / systemd-boot / rEFInd) | `amdgpu.ppfeaturemask=0xffffffff`, `amdgpu.gttsize=8000`, `split_lock_detect=off`, `transparent_hugepage=madvise` |
 | 7 | Gamemode | `/usr/local/bin/` | Демон + библиотеки установлены вручную (отсутствуют в базовом образе Bazzite) |
 | 8 | Переключатель PPD | `/usr/local/bin/gamemode-{start,end}.sh` | Переключает PPD performance↔balanced через busctl при запуске игр |
 | 9 | HHD | `/etc/hhd/state.yml` | Профиль balanced в покое |

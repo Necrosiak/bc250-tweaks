@@ -29,7 +29,7 @@ Das Skript klont dieses Repository nach `/opt/bc250-tweaks` und installiert eine
 | 3 | DRI Unified Heap | `/etc/drirc` | GPU nutzt System-RAM-Pool — verhindert VRAM OOM bei großen APU-Spielen |
 | 4 | Pipewire-Latenz | `~/.config/pipewire/pipewire.conf.d/` | quantum=512, rate=48000 |
 | 5 | Sysctl Gaming | `/etc/sysctl.d/99-bc250-gaming.conf` | compaction=0, numa_balancing=0, tcp_fastopen |
-| 6 | Kernel-Argumente | rpm-ostree | `amdgpu.ppfeaturemask=0xffffffff`, `amdgpu.gttsize=8000`, `split_lock_detect=off`, `transparent_hugepage=madvise` |
+| 6 | Kernel-Argumente | auto (rpm-ostree / grubby / GRUB / Limine / systemd-boot / rEFInd) | `amdgpu.ppfeaturemask=0xffffffff`, `amdgpu.gttsize=8000`, `split_lock_detect=off`, `transparent_hugepage=madvise` |
 | 7 | Gamemode | `/usr/local/bin/` | Daemon + Libs manuell installiert (im Bazzite-Basisimage nicht enthalten) |
 | 8 | PPD-Schalter | `/usr/local/bin/gamemode-{start,end}.sh` | Schaltet PPD performance↔balanced via busctl beim Spielstart |
 | 9 | HHD | `/etc/hhd/state.yml` | balanced-Profil im Ruhezustand |
