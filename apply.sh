@@ -906,6 +906,23 @@ apply_our_plugins() {
     _install_plugin "Steamcord"     "Necrosiak/Steamcord"          "Steamcord.zip"
 }
 
+# ══════════════════════════════════════════════════════════════════════════════
+# 17. uaccess clavier/souris (raccourci vocal Steamcord en jeu)
+# ══════════════════════════════════════════════════════════════════════════════
+# Bazzite n'accorde `uaccess` qu'aux joysticks (70-uaccess.rules ligne 61) et ne
+# livre pas le 70-steam-jupiter-input.rules de SteamOS → un plugin Decky non
+# privilégié ne peut pas lire /dev/input/event* pour un clavier ou une souris.
+# Voir configs/70-bc250-input-uaccess.rules pour le compromis de sécurité.
+apply_input_uaccess() {
+    local dst="/etc/udev/rules.d/70-bc250-input-uaccess.rules"
+    install_file "$CONFIGS/70-bc250-input-uaccess.rules" "$dst" 644
+    # Reprise à chaud : sans ça la règle ne prendrait qu'au prochain rebranchement
+    # (ou au reboot), et l'utilisateur croirait le tweak inopérant.
+    udevadm control --reload-rules 2>/dev/null || true
+    udevadm trigger --subsystem-match=input 2>/dev/null || true
+    log "uaccess clavier/souris actif — voir l'avertissement en tête de $dst"
+}
+
 # ── commande « bc250-status » : résumé santé (temps/ventilo/UMA/tweaks/plugins) ─
 apply_status_command() {
     [ -f "$REPO_DIR/status.sh" ] && \
@@ -954,6 +971,7 @@ main() {
     apply_cu_manager
     apply_uma_helper
     apply_uma_sudoers
+    apply_input_uaccess
     apply_deckyloader
     apply_our_plugins
     apply_status_command

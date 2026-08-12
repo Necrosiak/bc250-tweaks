@@ -42,6 +42,7 @@ Das Skript klont dieses Repository nach `/opt/bc250-tweaks` und installiert eine
 | 14 | umr sudoers | `/etc/sudoers.d/bc250-umr` | NOPASSWD sudo-Regel für umr (benötigt vom CU-Tab des BC250-Toolkit-Plugins) |
 | 15 | CU boot sudoers | `/etc/sudoers.d/bc250-cu-boot` | NOPASSWD sudo-Regeln für CU-Boot-Persistenz (tee, chmod, systemctl) |
 | 16 | UMA-Helper | `/usr/local/bin/bc250-uma-helper` | Root-Helper (NOPASSWD via `/etc/sudoers.d/bc250-uma`) zum Lesen/Schreiben der BIOS-EFI-Variable UMA Frame Buffer — genutzt vom VRAM (UMA)-Bereich des BC250-Toolkit-Plugins |
+| 17 | Eingabe-uaccess | `/etc/udev/rules.d/70-bc250-input-uaccess.rules` | Gewährt dem Benutzer der aktiven Sitzung Lesezugriff auf Tastatur-/Maus-Event-Nodes (Bazzite taggt nur Joysticks) — nötig, um eine physische Taste zu belegen, während ein Spiel den Fokus hat, z. B. Steamcord Push-to-Talk. ⚠️ Jeder Prozess dieses Benutzers kann dann alle Tastenanschläge lesen; Datei löschen zum Zurücksetzen |
 
 ### Empfohlene Steam-Startoption
 

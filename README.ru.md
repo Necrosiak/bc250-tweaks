@@ -42,6 +42,7 @@ curl -sL https://raw.githubusercontent.com/Necrosiak/bc250-tweaks/main/bootstrap
 | 14 | umr sudoers | `/etc/sudoers.d/bc250-umr` | Правило NOPASSWD sudo для umr (требуется вкладкой CU плагина BC250-Toolkit) |
 | 15 | CU boot sudoers | `/etc/sudoers.d/bc250-cu-boot` | Правила NOPASSWD sudo для сохранения CU при загрузке (tee, chmod, systemctl) |
 | 16 | UMA-helper | `/usr/local/bin/bc250-uma-helper` | Root-helper (NOPASSWD через `/etc/sudoers.d/bc250-uma`) для чтения/записи EFI-переменной UMA Frame Buffer BIOS — используется секцией VRAM (UMA) плагина BC250-Toolkit |
+| 17 | uaccess ввода | `/etc/udev/rules.d/70-bc250-input-uaccess.rules` | Даёт пользователю активного сеанса доступ на чтение к узлам клавиатуры/мыши (Bazzite помечает только джойстики) — нужно для привязки физической клавиши, когда игра в фокусе, напр. push-to-talk в Steamcord. ⚠️ Любой процесс этого пользователя сможет читать все нажатия клавиш; удалите файл, чтобы откатить |
 
 ### Рекомендуемый параметр запуска Steam
 

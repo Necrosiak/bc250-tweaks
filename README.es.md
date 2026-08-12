@@ -42,6 +42,7 @@ El script clona este repo en `/opt/bc250-tweaks` e instala un servicio systemd q
 | 14 | umr sudoers | `/etc/sudoers.d/bc250-umr` | Regla NOPASSWD sudo para umr (requerida por la pestaña CU del plugin BC250-Toolkit) |
 | 15 | CU boot sudoers | `/etc/sudoers.d/bc250-cu-boot` | Reglas NOPASSWD sudo para persistencia CU en el arranque (tee, chmod, systemctl) |
 | 16 | Helper UMA | `/usr/local/bin/bc250-uma-helper` | Helper root (NOPASSWD vía `/etc/sudoers.d/bc250-uma`) para leer/escribir la variable EFI UMA Frame Buffer del BIOS — usado por la sección VRAM (UMA) del plugin BC250-Toolkit |
+| 17 | uaccess de entrada | `/etc/udev/rules.d/70-bc250-input-uaccess.rules` | Concede al usuario de la sesión activa acceso de lectura a los nodos de teclado/ratón (Bazzite solo etiqueta joysticks) — necesario para asignar una tecla física mientras un juego tiene el foco, p. ej. el push-to-talk de Steamcord. ⚠️ Cualquier proceso de ese usuario podrá leer todas las pulsaciones; elimina el archivo para revertir |
 
 ### Opción de inicio Steam recomendada
 

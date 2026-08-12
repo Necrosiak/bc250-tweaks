@@ -1,0 +1,30 @@
+# BC-250 — accès utilisateur aux périphériques d'entrée (clavier / souris)
+#
+# POURQUOI
+# Un plugin Decky tourne en utilisateur NON privilégié. Pour lier une action à
+# une touche physique pendant qu'un jeu a le focus (push-to-talk de Steamcord),
+# il doit lire /dev/input/event*. Or Bazzite n'accorde `uaccess` qu'aux
+# joysticks : /usr/lib/udev/rules.d/70-uaccess.rules ligne 61 se limite à
+# ENV{ID_INPUT_JOYSTICK}. Ni clavier, ni souris.
+#
+# SteamOS, lui, livre 70-steam-jupiter-input.rules qui couvre les périphériques
+# d'entrée — fichier ABSENT de Bazzite. Cette règle rétablit la parité.
+#
+# Mesuré sur BC-250/Bazzite (12/08/2026) : un clavier USB n'était lisible que
+# parce que 60-openrgb.rules le taguait par accident pour son éclairage RGB ;
+# une souris sans fil branchée à côté renvoyait EACCES sur ses 5 nœuds.
+#
+# ⚠️ CE QUE ÇA COÛTE — à lire avant d'appliquer
+# `uaccess` donne l'accès à l'utilisateur de la session ACTIVE. Donc tout
+# processus lancé sous cet utilisateur — y compris un jeu, un mod, un script
+# téléchargé — peut lire TOUTES les frappes clavier de la machine, dans
+# n'importe quelle fenêtre, mots de passe compris. Sans cette règle, Wayland
+# isole les applications les unes des autres et cela n'est pas possible.
+#
+# C'est exactement le compromis que Valve accepte sur le Steam Deck. Sur une
+# console de jeu mono-utilisateur c'est défendable ; sur une machine qui sert
+# aussi de poste de travail, ça l'est beaucoup moins. Supprime ce fichier et
+# relance `udevadm control --reload && udevadm trigger` pour revenir en arrière.
+
+SUBSYSTEM=="input", ENV{ID_INPUT_KEYBOARD}=="1", TAG+="uaccess"
+SUBSYSTEM=="input", ENV{ID_INPUT_MOUSE}=="1", TAG+="uaccess"
