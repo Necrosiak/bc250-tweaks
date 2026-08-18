@@ -92,3 +92,7 @@ sudo /opt/bc250-tweaks/update.sh
 ## 🐧 Kompatibilität
 
 Wir arbeiten aktiv daran, dass diese Tweaks auf **jedem für den BC-250 dokumentierten Betriebssystem** ([Community-Doku](https://elektricm.github.io/amd-bc250-docs)) laufen — Bazzite, SteamOS, CachyOS/Arch, Fedora… Ziel: **automatische OS-Erkennung**, damit `apply.sh` die richtige Methode (Kernel-Argumente, Pakete, Dienste) für deine Distribution verwendet.
+
+## KI-Hinweis
+
+Bei der Entwicklung dieses Projekts wurde KI eingesetzt — für Reverse Engineering, Entwicklung und Dokumentation. **Nicht** für Grafik oder kreatives Schreiben. Alles Veröffentlichte wird von einem Menschen geprüft, und ich stehe für das Ergebnis gerade. Wer damit nicht einverstanden ist, weiß nun Bescheid.
