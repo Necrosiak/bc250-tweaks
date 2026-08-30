@@ -745,29 +745,81 @@ apply_proton_ge() {
     mkdir -p "$compat_dir"
 
     # Récupérer la dernière release
-    local latest
-    latest=$(curl -s "https://api.github.com/repos/GloriousEggroll/proton-ge-custom/releases/latest" \
-        | grep '"tag_name"' | cut -d'"' -f4) || true
+    local api latest
+    api=$(curl -s "https://api.github.com/repos/GloriousEggroll/proton-ge-custom/releases/latest") || true
+    latest=$(printf '%s' "$api" | grep '"tag_name"' | cut -d'"' -f4) || true
 
     if [ -z "$latest" ]; then
         warn "Impossible de récupérer la version Proton-GE (pas de réseau ?)"
-        return
+        return 0
     fi
 
     local dest="$compat_dir/$latest"
     if [ -d "$dest" ]; then
         skip "Proton-GE ($latest déjà installé)"
-        return
+        return 0
     fi
 
-    log "Téléchargement Proton-GE $latest..."
-    local url="https://github.com/GloriousEggroll/proton-ge-custom/releases/download/${latest}/${latest}.tar.gz"
+    # ⚠️ Ne PAS deviner le nom de l'archive. Depuis GE-Proton11, les assets sont
+    # suffixés par architecture (GE-Proton11-6-x86_64.tar.gz) ; les versions
+    # antérieures publiaient <tag>.tar.gz. L'URL devinée renvoyait un 404 de
+    # 9 octets, que tar refusait — et comme le script tourne en `set -e`, tout
+    # s'arrêtait là, sudoers et tweaks suivants compris. On lit donc le nom réel
+    # dans la réponse de l'API.
+    local arch url
+    case "$(uname -m)" in
+        x86_64)  arch="x86_64" ;;
+        aarch64) arch="aarch64" ;;
+        *)       arch="$(uname -m)" ;;
+    esac
+    url=$(printf '%s' "$api" \
+        | grep -o '"browser_download_url": *"[^"]*\.tar\.gz"' \
+        | cut -d'"' -f4 | grep -- "-${arch}\.tar\.gz$" | head -1) || true
+    if [ -z "$url" ]; then
+        # Releases d'avant la séparation par architecture.
+        url=$(printf '%s' "$api" \
+            | grep -o '"browser_download_url": *"[^"]*\.tar\.gz"' \
+            | cut -d'"' -f4 | grep -- "/${latest}\.tar\.gz$" | head -1) || true
+    fi
+    if [ -z "$url" ]; then
+        warn "Aucune archive Proton-GE pour $arch dans la release $latest — ignoré"
+        return 0
+    fi
+
+    log "Téléchargement Proton-GE $latest ($arch)..."
     local tmpfile
     tmpfile=$(mktemp /tmp/proton-ge-XXXXXX.tar.gz)
-    curl -sL "$url" -o "$tmpfile"
-    tar -xzf "$tmpfile" -C "$compat_dir"
+    # -f : une erreur HTTP devient un échec de curl au lieu d'un fichier d'erreur
+    # sauvegardé sur le disque et passé à tar.
+    if ! curl -fsSL "$url" -o "$tmpfile"; then
+        warn "Téléchargement de Proton-GE $latest échoué — ignoré"
+        rm -f "$tmpfile"
+        return 0
+    fi
+
+    # Vérification d'intégrité quand la release publie une somme (elles le font
+    # toutes depuis GE-Proton9) : une archive tronquée casse Steam en silence.
+    local sumurl expected actual
+    sumurl=$(printf '%s' "$api" \
+        | grep -o '"browser_download_url": *"[^"]*\.sha512sum"' \
+        | cut -d'"' -f4 | grep -- "-${arch}\.sha512sum$" | head -1) || true
+    if [ -n "$sumurl" ]; then
+        expected=$(curl -fsSL "$sumurl" 2>/dev/null | awk '{print $1}' | head -1) || true
+        actual=$(sha512sum "$tmpfile" | awk '{print $1}')
+        if [ -n "$expected" ] && [ "$expected" != "$actual" ]; then
+            warn "Somme sha512 incorrecte pour Proton-GE $latest — archive ignorée"
+            rm -f "$tmpfile"
+            return 0
+        fi
+    fi
+
+    if ! tar -xzf "$tmpfile" -C "$compat_dir"; then
+        warn "Extraction de Proton-GE $latest échouée — ignoré"
+        rm -f "$tmpfile"
+        return 0
+    fi
     rm -f "$tmpfile"
-    chown -R "$TARGET_USER:$TARGET_USER" "$dest"
+    [ -d "$dest" ] && chown -R "$TARGET_USER:$TARGET_USER" "$dest"
     log "Proton-GE $latest installé dans $compat_dir"
 }
 
