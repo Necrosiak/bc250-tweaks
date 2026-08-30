@@ -27,16 +27,26 @@ if [ -f "$FLAG" ]; then
     exit 0
 fi
 
-prev=$(journalctl -b -1 -k --no-pager 2>/dev/null | grep -c 'runnable task stall' || echo 0)
-case "$prev" in ''|*[!0-9]*) prev=0 ;; esac
+count_stalls() {
+    journalctl -b "$1" -k --no-pager 2>/dev/null | grep -c 'runnable task stall' || true
+}
+prev=$(count_stalls -1); case "$prev" in ''|*[!0-9]*) prev=0 ;; esac
+# Le boot COURANT compte aussi : ce script est également appelé par apply.sh, et
+# recharger un scheduler qui a déjà calé dans cette session-ci ne ferait que
+# rendre la machine à ses gels jusqu'au prochain redémarrage.
+cur=$(count_stalls 0);  case "$cur"  in ''|*[!0-9]*) cur=0 ;;  esac
 
-if [ "$prev" -ge "$THRESHOLD" ]; then
-    printf 'désarmé le %s : %s évictions du scheduler au boot précédent\n' \
-        "$(date -Is)" "$prev" > "$FLAG"
-    log "$prev évictions au boot précédent → scx_lavd NON chargé, on garde EEVDF"
+if [ $((prev + cur)) -ge "$THRESHOLD" ]; then
+    printf 'désarmé le %s : %s évictions au boot précédent, %s sur celui-ci\n' \
+        "$(date -Is)" "$prev" "$cur" > "$FLAG"
+    log "$prev éviction(s) au boot précédent + $cur sur celui-ci → scx_lavd NON chargé, on garde EEVDF"
     log "état : $FLAG"
     exit 0
 fi
+if [ "$cur" -ge 1 ]; then
+    log "$cur éviction déjà survenue sur ce boot → scx_lavd non rechargé maintenant"
+    exit 0
+fi
 
-log "démarrage de scx_lavd (aucune éviction au boot précédent)"
+log "démarrage de scx_lavd (aucune éviction relevée)"
 exec scxctl start --sched scx_lavd

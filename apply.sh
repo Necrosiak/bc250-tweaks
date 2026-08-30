@@ -710,13 +710,21 @@ apply_scx() {
     install_file "$CONFIGS/bc250-scx-autostart.service" "/etc/systemd/system/bc250-scx-autostart.service"
     systemctl daemon-reload 2>/dev/null || true
     systemctl enable --now bc250-scx-autostart.service 2>/dev/null || true
-    if [ "$scx_cfg_changed" = "1" ] && [ "$(cat /sys/kernel/sched_ext/state 2>/dev/null)" = "enabled" ]; then
-        # Sans ça, les nouvelles options n'arrivent qu'au prochain redémarrage —
-        # et l'utilisateur continue de subir les gels dus à la compaction de cœurs.
-        scxctl stop 2>/dev/null || true
-        sleep 1
-        scxctl start --sched scx_lavd 2>/dev/null || true
-        log "scheduler scx relancé avec les nouvelles options"
+    if [ "$scx_cfg_changed" = "1" ]; then
+        # ⚠️ scx_loader lit son TOML AU DÉMARRAGE et ne le relit jamais : relancer
+        # seulement le scheduler redémarrait lavd avec les anciennes options
+        # (constaté le 30/08 : --autopower toujours en vigueur après un apply).
+        # Il faut donc relancer le loader lui-même.
+        systemctl restart scx_loader.service 2>/dev/null || true
+        if [ "$(cat /sys/kernel/sched_ext/state 2>/dev/null)" = "enabled" ]; then
+            scxctl stop 2>/dev/null || true
+            sleep 1
+        fi
+        # Et on repasse par le script de démarrage, pas par scxctl directement :
+        # lui seul sait si le scheduler s'est déjà fait évincer, et recharger un
+        # lavd qui cale rendrait la machine à ses gels jusqu'au redémarrage.
+        /usr/local/bin/bc250-scx-start 2>/dev/null || true
+        log "scx_loader relancé avec les nouvelles options"
     fi
     log "scx_loader activé + autostart scx_lavd au boot"
 }
