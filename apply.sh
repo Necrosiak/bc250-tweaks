@@ -694,6 +694,13 @@ apply_hhd() {
 # 10. scx_loader
 # ══════════════════════════════════════════════════════════════════════════════
 apply_scx() {
+    # Un scheduler déjà chargé garde les options avec lesquelles il a démarré :
+    # réécrire le TOML ne suffit pas, il faut le relancer. On repère le cas AVANT
+    # d'écrire (sinon install_file a déjà rendu les fichiers identiques).
+    local scx_cfg_changed=0
+    if ! diff -q "$CONFIGS/scx_loader.toml" "/etc/scx_loader/config.toml" &>/dev/null; then
+        scx_cfg_changed=1
+    fi
     install_file "$CONFIGS/scx_loader.toml" "/etc/scx_loader/config.toml"
     systemctl enable --now scx_loader.service 2>/dev/null || true
     # scx_loader (Type=dbus) ne charge AUCUN scheduler au boot : il reste on-demand.
@@ -702,6 +709,14 @@ apply_scx() {
     install_file "$CONFIGS/bc250-scx-autostart.service" "/etc/systemd/system/bc250-scx-autostart.service"
     systemctl daemon-reload 2>/dev/null || true
     systemctl enable --now bc250-scx-autostart.service 2>/dev/null || true
+    if [ "$scx_cfg_changed" = "1" ] && [ "$(cat /sys/kernel/sched_ext/state 2>/dev/null)" = "enabled" ]; then
+        # Sans ça, les nouvelles options n'arrivent qu'au prochain redémarrage —
+        # et l'utilisateur continue de subir les gels dus à la compaction de cœurs.
+        scxctl stop 2>/dev/null || true
+        sleep 1
+        scxctl start --sched scx_lavd 2>/dev/null || true
+        log "scheduler scx relancé avec les nouvelles options"
+    fi
     log "scx_loader activé + autostart scx_lavd au boot"
 }
 
@@ -791,6 +806,36 @@ $TARGET_USER ALL=(root) NOPASSWD: /usr/bin/systemctl enable bc250-cu-profile.ser
 EOF
     chmod 440 "$sudoers_file"
     log "sudoers cu-boot configuré : $TARGET_USER peut écrire le service CU boot sans mot de passe"
+}
+
+apply_core_boot_sudoers() {
+    local sudoers_file="/etc/sudoers.d/bc250-core-boot"
+    local marker="bc250-core-boot-sudoers-v1"
+
+    if [ -f "$sudoers_file" ] && grep -qF "$marker" "$sudoers_file" 2>/dev/null; then
+        skip "sudoers core-boot ($sudoers_file déjà configuré)"
+        return
+    fi
+
+    # Persistance du déverrouillage 8C/16T. Contrairement aux CU (pokés à chaud),
+    # les cœurs n'apparaissent qu'au redémarrage suivant : le service écrit le
+    # masque puis redémarre UNE fois, avec un plafond de 2 tentatives. Les
+    # scripts sont recopiés hors du dossier du plugin, que Decky réécrit.
+    cat > "$sudoers_file" <<EOF
+# $marker — BC250-Toolkit-Decky : persistance du déverrouillage CPU au boot
+$TARGET_USER ALL=(root) NOPASSWD: /usr/bin/mkdir -p /usr/local/lib/bc250-core-unlock
+$TARGET_USER ALL=(root) NOPASSWD: /usr/bin/tee /usr/local/lib/bc250-core-unlock/bc250-core-status.py
+$TARGET_USER ALL=(root) NOPASSWD: /usr/bin/tee /usr/local/lib/bc250-core-unlock/bc250-unlock-cores.py
+$TARGET_USER ALL=(root) NOPASSWD: /usr/bin/tee /usr/local/bin/bc250-core-boot
+$TARGET_USER ALL=(root) NOPASSWD: /usr/bin/chmod 755 /usr/local/bin/bc250-core-boot
+$TARGET_USER ALL=(root) NOPASSWD: /usr/bin/tee /etc/systemd/system/bc250-core-unlock.service
+$TARGET_USER ALL=(root) NOPASSWD: /usr/bin/systemctl daemon-reload
+$TARGET_USER ALL=(root) NOPASSWD: /usr/bin/systemctl enable bc250-core-unlock.service
+$TARGET_USER ALL=(root) NOPASSWD: /usr/bin/systemctl disable bc250-core-unlock.service
+$TARGET_USER ALL=(root) NOPASSWD: /usr/bin/rm -f /var/lib/bc250-core-unlock/attempts
+EOF
+    chmod 440 "$sudoers_file"
+    log "sudoers core-boot configuré : $TARGET_USER peut installer le service 8C/16T sans mot de passe"
 }
 
 apply_cu_manager() {
@@ -968,6 +1013,7 @@ main() {
     apply_proton_ge
     apply_umr_sudoers
     apply_cu_boot_sudoers
+    apply_core_boot_sudoers
     apply_cu_manager
     apply_uma_helper
     apply_uma_sudoers

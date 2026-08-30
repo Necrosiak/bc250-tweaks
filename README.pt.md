@@ -35,7 +35,7 @@ O script clona este repo em `/opt/bc250-tweaks` e instala um serviço systemd qu
 | 7 | Gamemode | `/usr/local/bin/` | Daemon + libs instalados manualmente (ausentes na imagem base Bazzite) |
 | 8 | Switch PPD | `/usr/local/bin/gamemode-{start,end}.sh` | Alterna PPD performance↔balanced via busctl ao iniciar jogos |
 | 9 | HHD | `/etc/hhd/state.yml` | Perfil balanced em repouso |
-| 10 | scx_lavd | `/etc/scx_loader/config.toml` | Scheduler `--autopower` (segue PPD) |
+| 10 | scx_lavd | `/etc/scx_loader/config.toml` | Scheduler `--performance` (sem compactação de núcleos — ver abaixo) |
 | 11 | MangoHud | `~/.config/MangoHud/MangoHud.conf` | Overlay leve, toggle Shift+F12 |
 | 12 | vkBasalt CAS | `~/.config/vkBasalt.conf` | Sharpening adaptativo, toggle Home |
 | 13 | Proton-GE | `~/.steam/steam/compatibilitytools.d/` | Última versão GE-Proton instalada |
@@ -43,6 +43,15 @@ O script clona este repo em `/opt/bc250-tweaks` e instala um serviço systemd qu
 | 15 | CU boot sudoers | `/etc/sudoers.d/bc250-cu-boot` | Regras NOPASSWD sudo para persistência CU no arranque (tee, chmod, systemctl) |
 | 16 | Helper UMA | `/usr/local/bin/bc250-uma-helper` | Helper root (NOPASSWD via `/etc/sudoers.d/bc250-uma`) para ler/escrever a variável EFI UMA Frame Buffer do BIOS — usado pela secção VRAM (UMA) do plugin BC250-Toolkit |
 | 17 | uaccess de entrada | `/etc/udev/rules.d/70-bc250-input-uaccess.rules` | Concede ao utilizador da sessão ativa acesso de leitura aos nós de teclado/rato (o Bazzite só etiqueta joysticks) — necessário para associar uma tecla física enquanto um jogo tem o foco, ex. o push-to-talk do Steamcord. ⚠️ Qualquer processo desse utilizador pode então ler todas as teclas premidas; elimine o ficheiro para reverter |
+| 18 | Core boot sudoers | `/etc/sudoers.d/bc250-core-boot` | Regras NOPASSWD que permitem ao Toolkit instalar o serviço 8C/16T no arranque (tee, chmod, systemctl enable/disable) |
+
+### Porque é que o escalonador corre sem compactação de núcleos
+
+Com `--autopower`, o `scx_lavd` segue o perfil de energia do sistema, e esse perfil decide, entre outras coisas, a compactação de núcleos. Nesse estado o kernel expulsava-o repetidamente: `sched_ext: BPF scheduler "lavd_…" disabled (runnable task stall)`, com uma tarefa que não corria há 37 segundos. Toda a interface congela 5 a 10 segundos — no mesmo instante há serviços systemd a esgotarem o tempo, portanto é o sistema que bloqueia e não apenas a imagem — e depois o `scx_loader` recarrega o lavd e o ciclo recomeça. Os jogos nunca notam; o ambiente de trabalho e o gamescope sim.
+
+Medido na BC-250 de referência (6C/12T) a 30/08/2026: com `--autopower`, um bloqueio a cada três minutos aproximadamente; com `--performance`, nenhum, e o `scx_lavd --monitor` indica `# ACT CPU 12` — os doze CPU ativos, power mode performance, fila vazia.
+
+Uma BC-250 é uma placa de mineração alimentada pela rede elétrica, sem bateria: um perfil de energia não traz nada aqui. `--performance` mantém o lavd e o seu escalonamento orientado à latência, com todos os threads disponíveis. Verifica com `./status.sh`: uma linha `↳ blocages scx` significa que o escalonador continua a encravar.
 
 ### Opção de lançamento Steam recomendada
 

@@ -35,7 +35,7 @@ The script clones this repo to `/opt/bc250-tweaks` and installs a systemd servic
 | 7 | Gamemode | `/usr/local/bin/` | Daemon + libs installed manually (absent from Bazzite base image) |
 | 8 | PPD switch | `/usr/local/bin/gamemode-{start,end}.sh` | Switches PPD performance↔balanced via busctl on game launch |
 | 9 | HHD | `/etc/hhd/state.yml` | balanced profile at rest |
-| 10 | scx_lavd | `/etc/scx_loader/config.toml` | `--autopower` scheduler (follows PPD) |
+| 10 | scx_lavd | `/etc/scx_loader/config.toml` | `--performance` scheduler (no core compaction — see below) |
 | 11 | MangoHud | `~/.config/MangoHud/MangoHud.conf` | Lightweight overlay, toggle Shift+F12 |
 | 12 | vkBasalt CAS | `~/.config/vkBasalt.conf` | Adaptive sharpening, toggle Home |
 | 13 | Proton-GE | `~/.steam/steam/compatibilitytools.d/` | Latest GE-Proton installed |
@@ -43,6 +43,15 @@ The script clones this repo to `/opt/bc250-tweaks` and installs a systemd servic
 | 15 | CU boot sudoers | `/etc/sudoers.d/bc250-cu-boot` | NOPASSWD sudo rules for CU boot persistence (tee, chmod, systemctl) |
 | 16 | UMA helper | `/usr/local/bin/bc250-uma-helper` | Root helper (NOPASSWD via `/etc/sudoers.d/bc250-uma`) to read/write the BIOS UMA Frame Buffer EFI variable — used by the BC250-Toolkit plugin VRAM (UMA) section |
 | 17 | Input uaccess | `/etc/udev/rules.d/70-bc250-input-uaccess.rules` | Grants the active session user read access to keyboard/mouse event nodes (Bazzite only tags joysticks) — needed to bind a physical key while a game has focus, e.g. Steamcord push-to-talk. ⚠️ Any process running as that user can then read every keystroke; delete the file to revert |
+| 18 | Core boot sudoers | `/etc/sudoers.d/bc250-core-boot` | NOPASSWD sudo rules letting the Toolkit install the 8C/16T boot service (tee, chmod, systemctl enable/disable) |
+
+### Why the scheduler runs without core compaction
+
+With `--autopower`, `scx_lavd` follows the system power profile, and that profile decides whether it compacts cores. In that state the kernel kept evicting it: `sched_ext: BPF scheduler "lavd_…" disabled (runnable task stall)`, with a task reported as not having run for 37 seconds. The whole interface freezes for 5 to 10 seconds — systemd services time out at the same instant, so it is the system blocking, not just the display — then `scx_loader` reloads lavd and the cycle repeats. Games never notice; the desktop and gamescope do.
+
+Measured on the reference BC-250 (6C/12T) on 2026-08-30: `--autopower` stalled roughly every three minutes, while `--performance` produced none and `scx_lavd --monitor` reported `# ACT CPU 12` — all twelve CPUs active, power mode performance, empty run queue.
+
+A BC-250 is a mains-powered mining board with no battery, so a power profile buys nothing here. `--performance` keeps lavd and its latency-aware scheduling with every thread available. Run `./status.sh` to check: a `↳ blocages scx` line means the scheduler is still wedging.
 
 ### Recommended Steam launch option
 

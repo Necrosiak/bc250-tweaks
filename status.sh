@@ -63,6 +63,13 @@ hdr "⚙️  Tweaks actifs"
 scx=$(cat /sys/kernel/sched_ext/state 2>/dev/null)
 scx_s=$(cat /sys/kernel/sched_ext/root/ops 2>/dev/null || cat /sys/kernel/sched_ext/*/ops 2>/dev/null | head -1)
 [ "$scx" = "enabled" ] && row "scheduler scx" "${c_ok}$scx${c_z} ${scx_s:+($scx_s)}" || row "scheduler scx" "${c_dim}${scx:-off}${c_z}"
+# Un scheduler scx qui cale fige TOUTE l'interface plusieurs secondes, puis est
+# sorti du jeu par le watchdog noyau et relancé : sans cette ligne, le symptôme
+# ressemble à un problème de GPU ou de gamescope. Le compteur le nomme.
+scx_stalls=$(journalctl -b 0 -k --no-pager 2>/dev/null | grep -c 'runnable task stall')
+if [ "${scx_stalls:-0}" -gt 0 ]; then
+    row "  ↳ blocages scx" "${c_bad}${scx_stalls} depuis le boot${c_z} ${c_dim}(gels de l'interface — voir configs/scx_loader.toml)${c_z}"
+fi
 pgrep -x gamemoded >/dev/null 2>&1 && row "gamemoded" "${c_ok}actif${c_z}" || row "gamemoded" "${c_dim}inactif${c_z}"
 grep -q "zswap.enabled=1" /proc/cmdline 2>/dev/null && row "zswap" "${c_ok}activé${c_z}" || row "zswap" "${c_dim}off${c_z}"
 grep -q "split_lock_detect=off" /proc/cmdline && row "split_lock_detect" "${c_ok}off (bon)${c_z}" || row "split_lock_detect" "${c_dim}on${c_z}"

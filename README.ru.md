@@ -35,7 +35,7 @@ curl -sL https://raw.githubusercontent.com/Necrosiak/bc250-tweaks/main/bootstrap
 | 7 | Gamemode | `/usr/local/bin/` | Демон + библиотеки установлены вручную (отсутствуют в базовом образе Bazzite) |
 | 8 | Переключатель PPD | `/usr/local/bin/gamemode-{start,end}.sh` | Переключает PPD performance↔balanced через busctl при запуске игр |
 | 9 | HHD | `/etc/hhd/state.yml` | Профиль balanced в покое |
-| 10 | scx_lavd | `/etc/scx_loader/config.toml` | Планировщик `--autopower` (следует PPD) |
+| 10 | scx_lavd | `/etc/scx_loader/config.toml` | Планировщик `--performance` (без уплотнения ядер — см. ниже) |
 | 11 | MangoHud | `~/.config/MangoHud/MangoHud.conf` | Лёгкий оверлей, переключатель Shift+F12 |
 | 12 | vkBasalt CAS | `~/.config/vkBasalt.conf` | Адаптивное повышение чёткости, переключатель Home |
 | 13 | Proton-GE | `~/.steam/steam/compatibilitytools.d/` | Установлена последняя версия GE-Proton |
@@ -43,6 +43,15 @@ curl -sL https://raw.githubusercontent.com/Necrosiak/bc250-tweaks/main/bootstrap
 | 15 | CU boot sudoers | `/etc/sudoers.d/bc250-cu-boot` | Правила NOPASSWD sudo для сохранения CU при загрузке (tee, chmod, systemctl) |
 | 16 | UMA-helper | `/usr/local/bin/bc250-uma-helper` | Root-helper (NOPASSWD через `/etc/sudoers.d/bc250-uma`) для чтения/записи EFI-переменной UMA Frame Buffer BIOS — используется секцией VRAM (UMA) плагина BC250-Toolkit |
 | 17 | uaccess ввода | `/etc/udev/rules.d/70-bc250-input-uaccess.rules` | Даёт пользователю активного сеанса доступ на чтение к узлам клавиатуры/мыши (Bazzite помечает только джойстики) — нужно для привязки физической клавиши, когда игра в фокусе, напр. push-to-talk в Steamcord. ⚠️ Любой процесс этого пользователя сможет читать все нажатия клавиш; удалите файл, чтобы откатить |
+| 18 | Core boot sudoers | `/etc/sudoers.d/bc250-core-boot` | Правила NOPASSWD, позволяющие Toolkit установить службу 8C/16T при загрузке (tee, chmod, systemctl enable/disable) |
+
+### Почему планировщик работает без уплотнения ядер
+
+С `--autopower` `scx_lavd` следует профилю энергопотребления системы, а этот профиль определяет в том числе уплотнение ядер. В таком состоянии ядро раз за разом выбрасывало его: `sched_ext: BPF scheduler "lavd_…" disabled (runnable task stall)`, при этом одна задача не выполнялась 37 секунд. Весь интерфейс замирает на 5-10 секунд — в тот же момент службы systemd завершаются по таймауту, то есть блокируется система, а не только изображение — затем `scx_loader` перезагружает lavd, и цикл повторяется. Игры этого не замечают, а рабочий стол и gamescope — да.
+
+Измерено на эталонной BC-250 (6C/12T) 30.08.2026: с `--autopower` блокировка примерно каждые три минуты, с `--performance` — ни одной, а `scx_lavd --monitor` показывает `# ACT CPU 12`: все двенадцать CPU активны, power mode performance, очередь пуста.
+
+BC-250 — это майнинговая плата с питанием от сети, без батареи: профиль энергопотребления здесь ничего не даёт. `--performance` сохраняет lavd и его ориентированное на задержки планирование, оставляя все потоки доступными. Проверить можно через `./status.sh`: строка `↳ blocages scx` означает, что планировщик всё ещё зависает.
 
 ### Рекомендуемый параметр запуска Steam
 
