@@ -754,8 +754,27 @@ apply_proton_ge() {
         return 0
     fi
 
-    local dest="$compat_dir/$latest"
-    if [ -d "$dest" ]; then
+    # ⚠️ Le dossier extrait ne porte PAS le nom du tag : l'archive x86_64 se
+    # déplie en GE-Proton11-6-x86_64. Chercher "$compat_dir/$latest" ne trouvait
+    # donc jamais rien → réinstallation complète (~400 Mo) à chaque exécution.
+    # Le vrai nom est déterminé plus bas, à partir de l'archive elle-même ; ici
+    # on accepte les deux formes pour détecter une install existante.
+    local dest=""
+    local d
+    for d in "$compat_dir/$latest" "$compat_dir/$latest"-*; do
+        if [ -d "$d" ]; then
+            dest="$d"
+            break
+        fi
+    done
+    if [ -n "$dest" ]; then
+        # Une version antérieure du script extrayait en root sans jamais rendre
+        # la main à l'utilisateur : Steam tourne sous son compte et ne peut pas
+        # gérer un Proton qui ne lui appartient pas. On répare au passage.
+        if [ "$(stat -c %U "$dest" 2>/dev/null)" != "$TARGET_USER" ]; then
+            chown -R "$TARGET_USER:$TARGET_USER" "$dest"
+            log "Proton-GE $latest : propriétaire corrigé ($TARGET_USER)"
+        fi
         skip "Proton-GE ($latest déjà installé)"
         return 0
     fi
@@ -813,13 +832,22 @@ apply_proton_ge() {
         fi
     fi
 
+    # Nom réel du dossier, lu dans l'archive : c'est lui qu'il faudra donner à
+    # l'utilisateur, et c'est lui que la prochaine exécution devra reconnaître.
+    local topdir
+    topdir=$(tar -tzf "$tmpfile" 2>/dev/null | head -1 | cut -d/ -f1) || true
+
     if ! tar -xzf "$tmpfile" -C "$compat_dir"; then
         warn "Extraction de Proton-GE $latest échouée — ignoré"
         rm -f "$tmpfile"
         return 0
     fi
     rm -f "$tmpfile"
-    [ -d "$dest" ] && chown -R "$TARGET_USER:$TARGET_USER" "$dest"
+    if [ -n "$topdir" ] && [ -d "$compat_dir/$topdir" ]; then
+        chown -R "$TARGET_USER:$TARGET_USER" "$compat_dir/$topdir"
+    else
+        warn "Proton-GE $latest extrait, mais dossier introuvable — propriétaire non corrigé"
+    fi
     log "Proton-GE $latest installé dans $compat_dir"
 }
 
