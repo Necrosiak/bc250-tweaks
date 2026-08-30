@@ -35,7 +35,7 @@ Skrypt klonuje to repo do `/opt/bc250-tweaks` i instaluje usługę systemd, któ
 | 7 | Gamemode | `/usr/local/bin/` | Daemon + libs zainstalowane ręcznie (nieobecne w bazowym obrazie Bazzite) |
 | 8 | Przełącznik PPD | `/usr/local/bin/gamemode-{start,end}.sh` | Przełącza PPD performance↔balanced przez busctl przy uruchamianiu gier |
 | 9 | HHD | `/etc/hhd/state.yml` | Profil balanced w spoczynku |
-| 10 | scx_lavd | `/etc/scx_loader/config.toml` | Scheduler `--performance` (bez kompakcji rdzeni — patrz niżej) |
+| 10 | scx_lavd | `/etc/scx_loader/config.toml` | Scheduler pod kątem opóźnień, ładowany przez `bc250-scx-start` — rozbraja się, jeśli poprzedni start się zaciął (patrz niżej) |
 | 11 | MangoHud | `~/.config/MangoHud/MangoHud.conf` | Lekki overlay, toggle Shift+F12 |
 | 12 | vkBasalt CAS | `~/.config/vkBasalt.conf` | Adaptywne wyostrzanie, toggle Home |
 | 13 | Proton-GE | `~/.steam/steam/compatibilitytools.d/` | Zainstalowana najnowsza wersja GE-Proton |
@@ -45,14 +45,15 @@ Skrypt klonuje to repo do `/opt/bc250-tweaks` i instaluje usługę systemd, któ
 | 17 | uaccess wejścia | `/etc/udev/rules.d/70-bc250-input-uaccess.rules` | Daje użytkownikowi aktywnej sesji dostęp do odczytu węzłów klawiatury/myszy (Bazzite taguje tylko joysticki) — potrzebne do przypisania fizycznego klawisza, gdy gra ma fokus, np. push-to-talk w Steamcord. ⚠️ Każdy proces tego użytkownika może wtedy odczytać wszystkie naciśnięcia klawiszy; usuń plik, aby cofnąć |
 | 18 | Core boot sudoers | `/etc/sudoers.d/bc250-core-boot` | Reguły NOPASSWD pozwalające Toolkitowi zainstalować usługę 8C/16T przy starcie (tee, chmod, systemctl enable/disable) |
 
-### Dlaczego scheduler działa bez kompakcji rdzeni
+### Scheduler sam się rozbraja, gdy się zacina
 
-Z `--autopower` `scx_lavd` podąża za profilem energetycznym systemu, a ten profil decyduje między innymi o kompakcji rdzeni. W tym stanie jądro raz po raz go usuwało: `sched_ext: BPF scheduler "lavd_…" disabled (runnable task stall)`, z zadaniem, które nie działało przez 37 sekund. Cały interfejs zamarza na 5-10 sekund — w tej samej chwili usługi systemd kończą się timeoutem, blokuje się więc system, a nie tylko obraz — po czym `scx_loader` ładuje lavd ponownie i cykl się powtarza. Gry tego nie odczuwają; pulpit i gamescope owszem.
+`scx_lavd` daje planowanie pod kątem opóźnień, ale na tej płycie jądro czasem go usuwa: `sched_ext: BPF scheduler "lavd_…" disabled (runnable task stall)`, z zadaniem, które nie działało przez 35 do 45 sekund. Cały interfejs zamarza — w tej samej chwili usługi systemd kończą się timeoutem, blokuje się więc system, a nie tylko obraz — po czym `scx_loader` ładuje go ponownie i cykl się powtarza.
 
-Zmierzone na referencyjnej BC-250 (6C/12T) 30.08.2026: przy `--autopower` blokada mniej więcej co trzy minuty, przy `--performance` żadnej — a `scx_lavd --monitor` pokazuje `# ACT CPU 12`: wszystkie dwanaście CPU aktywnych, power mode performance, pusta kolejka.
+Zmierzone na referencyjnej BC-250 (6C/12T, jądro 7.2.1-ogc2, scx-scheds 1.1.3-3) 30.08.2026: zdarza się przy `--autopower` **i** przy `--performance`. Zmiana trybu energetycznego nic nie daje. Wśród zaobserwowanych ofiar jest `winedevice.exe`, więc może uderzyć także w grze, nie tylko na pulpicie.
 
-BC-250 to zasilana z sieci płyta do kopania, bez baterii — profil energetyczny nic tu nie daje. `--performance` zachowuje lavd i jego planowanie pod kątem opóźnień, ze wszystkimi wątkami dostępnymi. Sprawdź przez `./status.sh`: wiersz `↳ blocages scx` oznacza, że scheduler nadal się zacina.
+Dlatego usługa startowa nie zgaduje wersji — obserwuje. `bc250-scx-start` liczy usunięcia z *poprzedniego* startu i powyżej dwóch rozbraja się, zostawiając planistę jądra (EEVDF), zamiast wymuszać powtarzające się zacięcia. Aby spróbować ponownie: `sudo rm /var/lib/bc250-scx/disabled` i uruchom ponownie. `./status.sh` pokazuje wiersz `↳ blocages scx`, gdy bieżący start jakieś odnotował.
 
+`--performance` pozostaje używany z innego powodu: zasilana z sieci płyta do kopania bez baterii nie potrzebuje profilu energetycznego, a tym bardziej kompakcji rdzeni.
 ### Zalecana opcja uruchamiania Steam
 
 ```

@@ -706,6 +706,7 @@ apply_scx() {
     # scx_loader (Type=dbus) ne charge AUCUN scheduler au boot : il reste on-demand.
     # Le flag --auto désactiverait l'interface D-Bus (scxctl/Steam perdraient le contrôle).
     # → service oneshot qui appelle scxctl start au boot (D-Bus préservé).
+    install_file "$CONFIGS/bc250-scx-start.sh" "/usr/local/bin/bc250-scx-start" 755
     install_file "$CONFIGS/bc250-scx-autostart.service" "/etc/systemd/system/bc250-scx-autostart.service"
     systemctl daemon-reload 2>/dev/null || true
     systemctl enable --now bc250-scx-autostart.service 2>/dev/null || true

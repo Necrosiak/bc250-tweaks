@@ -35,7 +35,7 @@ Lo script clona questo repo in `/opt/bc250-tweaks` e installa un servizio system
 | 7 | Gamemode | `/usr/local/bin/` | Daemon + libs installati manualmente (assenti nell'immagine base Bazzite) |
 | 8 | Switch PPD | `/usr/local/bin/gamemode-{start,end}.sh` | Cambia PPD performance↔balanced via busctl all'avvio dei giochi |
 | 9 | HHD | `/etc/hhd/state.yml` | Profilo balanced a riposo |
-| 10 | scx_lavd | `/etc/scx_loader/config.toml` | Scheduler `--performance` (senza compattazione dei core — vedi sotto) |
+| 10 | scx_lavd | `/etc/scx_loader/config.toml` | Scheduler orientato alla latenza, caricato da `bc250-scx-start`, che si disarma se l'avvio precedente si è inceppato (vedi sotto) |
 | 11 | MangoHud | `~/.config/MangoHud/MangoHud.conf` | Overlay leggero, toggle Shift+F12 |
 | 12 | vkBasalt CAS | `~/.config/vkBasalt.conf` | Sharpening adattivo, toggle Home |
 | 13 | Proton-GE | `~/.steam/steam/compatibilitytools.d/` | Ultima versione GE-Proton installata |
@@ -45,14 +45,15 @@ Lo script clona questo repo in `/opt/bc250-tweaks` e installa un servizio system
 | 17 | uaccess input | `/etc/udev/rules.d/70-bc250-input-uaccess.rules` | Concede all'utente della sessione attiva l'accesso in lettura ai nodi tastiera/mouse (Bazzite etichetta solo i joystick) — necessario per associare un tasto fisico mentre un gioco ha il focus, es. il push-to-talk di Steamcord. ⚠️ Qualsiasi processo di quell'utente può leggere tutte le pressioni dei tasti; elimina il file per annullare |
 | 18 | Core boot sudoers | `/etc/sudoers.d/bc250-core-boot` | Regole NOPASSWD che permettono al Toolkit di installare il servizio 8C/16T all'avvio (tee, chmod, systemctl enable/disable) |
 
-### Perché lo scheduler gira senza compattazione dei core
+### Lo scheduler si disarma da solo quando si inceppa
 
-Con `--autopower`, `scx_lavd` segue il profilo energetico del sistema, e quel profilo decide fra l'altro la compattazione dei core. In quello stato il kernel lo espelleva di continuo: `sched_ext: BPF scheduler "lavd_…" disabled (runnable task stall)`, con un task che risultava non eseguito da 37 secondi. Tutta l'interfaccia si congela per 5-10 secondi — nello stesso istante alcuni servizi systemd vanno in timeout, quindi è il sistema a bloccarsi e non solo il video — poi `scx_loader` ricarica lavd e il ciclo ricomincia. I giochi non se ne accorgono; il desktop e gamescope sì.
+`scx_lavd` offre una schedulazione orientata alla latenza, ma su questa scheda il kernel a volte lo espelle: `sched_ext: BPF scheduler "lavd_…" disabled (runnable task stall)`, con un task che risulta non eseguito da 35 a 45 secondi. Tutta l'interfaccia si congela — nello stesso istante alcuni servizi systemd vanno in timeout, quindi è il sistema a bloccarsi e non solo il video — poi `scx_loader` lo ricarica e il ciclo ricomincia.
 
-Misurato sulla BC-250 di riferimento (6C/12T) il 30/08/2026: con `--autopower`, un blocco circa ogni tre minuti; con `--performance`, nessuno, e `scx_lavd --monitor` riporta `# ACT CPU 12` — tutte e dodici le CPU attive, power mode performance, coda vuota.
+Misurato sulla BC-250 di riferimento (6C/12T, kernel 7.2.1-ogc2, scx-scheds 1.1.3-3) il 30/08/2026: accade con `--autopower` **e** con `--performance`. Cambiare modalità energetica non risolve. Fra le vittime osservate c'è `winedevice.exe`, quindi può colpire anche durante un gioco, non solo sul desktop.
 
-Una BC-250 è una scheda da mining alimentata a rete, senza batteria: un profilo energetico qui non serve a nulla. `--performance` mantiene lavd e la sua schedulazione orientata alla latenza, con tutti i thread disponibili. Verifica con `./status.sh`: una riga `↳ blocages scx` significa che lo scheduler si sta ancora inceppando.
+Per questo il servizio di avvio non tira a indovinare sulle versioni: osserva. `bc250-scx-start` conta le espulsioni dell'avvio *precedente* e, oltre due, si disarma lasciando in campo lo scheduler del kernel (EEVDF) invece di imporre blocchi ripetuti. Per riprovare: `sudo rm /var/lib/bc250-scx/disabled` e riavviare. `./status.sh` mostra una riga `↳ blocages scx` non appena l'avvio corrente ne ha viste.
 
+`--performance` resta in uso, per un altro motivo: una scheda da mining alimentata a rete e senza batteria non ha bisogno di un profilo energetico, né tantomeno della compattazione dei core.
 ### Opzione di avvio Steam consigliata
 
 ```

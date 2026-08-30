@@ -35,7 +35,7 @@ O script clona este repo em `/opt/bc250-tweaks` e instala um serviço systemd qu
 | 7 | Gamemode | `/usr/local/bin/` | Daemon + libs instalados manualmente (ausentes na imagem base Bazzite) |
 | 8 | Switch PPD | `/usr/local/bin/gamemode-{start,end}.sh` | Alterna PPD performance↔balanced via busctl ao iniciar jogos |
 | 9 | HHD | `/etc/hhd/state.yml` | Perfil balanced em repouso |
-| 10 | scx_lavd | `/etc/scx_loader/config.toml` | Scheduler `--performance` (sem compactação de núcleos — ver abaixo) |
+| 10 | scx_lavd | `/etc/scx_loader/config.toml` | Escalonador orientado à latência, carregado pelo `bc250-scx-start`, que se desarma se o arranque anterior encravou (ver abaixo) |
 | 11 | MangoHud | `~/.config/MangoHud/MangoHud.conf` | Overlay leve, toggle Shift+F12 |
 | 12 | vkBasalt CAS | `~/.config/vkBasalt.conf` | Sharpening adaptativo, toggle Home |
 | 13 | Proton-GE | `~/.steam/steam/compatibilitytools.d/` | Última versão GE-Proton instalada |
@@ -45,14 +45,15 @@ O script clona este repo em `/opt/bc250-tweaks` e instala um serviço systemd qu
 | 17 | uaccess de entrada | `/etc/udev/rules.d/70-bc250-input-uaccess.rules` | Concede ao utilizador da sessão ativa acesso de leitura aos nós de teclado/rato (o Bazzite só etiqueta joysticks) — necessário para associar uma tecla física enquanto um jogo tem o foco, ex. o push-to-talk do Steamcord. ⚠️ Qualquer processo desse utilizador pode então ler todas as teclas premidas; elimine o ficheiro para reverter |
 | 18 | Core boot sudoers | `/etc/sudoers.d/bc250-core-boot` | Regras NOPASSWD que permitem ao Toolkit instalar o serviço 8C/16T no arranque (tee, chmod, systemctl enable/disable) |
 
-### Porque é que o escalonador corre sem compactação de núcleos
+### O escalonador desarma-se sozinho quando encrava
 
-Com `--autopower`, o `scx_lavd` segue o perfil de energia do sistema, e esse perfil decide, entre outras coisas, a compactação de núcleos. Nesse estado o kernel expulsava-o repetidamente: `sched_ext: BPF scheduler "lavd_…" disabled (runnable task stall)`, com uma tarefa que não corria há 37 segundos. Toda a interface congela 5 a 10 segundos — no mesmo instante há serviços systemd a esgotarem o tempo, portanto é o sistema que bloqueia e não apenas a imagem — e depois o `scx_loader` recarrega o lavd e o ciclo recomeça. Os jogos nunca notam; o ambiente de trabalho e o gamescope sim.
+O `scx_lavd` traz escalonamento orientado à latência, mas nesta placa o kernel por vezes expulsa-o: `sched_ext: BPF scheduler "lavd_…" disabled (runnable task stall)`, com uma tarefa que não corre há 35 a 45 segundos. Toda a interface congela — no mesmo instante há serviços systemd a esgotarem o tempo, portanto é o sistema que bloqueia e não apenas a imagem — e depois o `scx_loader` recarrega-o e o ciclo recomeça.
 
-Medido na BC-250 de referência (6C/12T) a 30/08/2026: com `--autopower`, um bloqueio a cada três minutos aproximadamente; com `--performance`, nenhum, e o `scx_lavd --monitor` indica `# ACT CPU 12` — os doze CPU ativos, power mode performance, fila vazia.
+Medido na BC-250 de referência (6C/12T, kernel 7.2.1-ogc2, scx-scheds 1.1.3-3) a 30/08/2026: acontece com `--autopower` **e** com `--performance`. Mudar o modo de energia não resolve. Entre as vítimas observadas está o `winedevice.exe`, por isso também pode atingir durante um jogo, não só no ambiente de trabalho.
 
-Uma BC-250 é uma placa de mineração alimentada pela rede elétrica, sem bateria: um perfil de energia não traz nada aqui. `--performance` mantém o lavd e o seu escalonamento orientado à latência, com todos os threads disponíveis. Verifica com `./status.sh`: uma linha `↳ blocages scx` significa que o escalonador continua a encravar.
+Por isso o serviço de arranque não adivinha versões: observa. O `bc250-scx-start` conta as expulsões do arranque *anterior* e, passadas duas, desarma-se e deixa o escalonador do kernel (EEVDF) no lugar em vez de impor bloqueios repetidos. Para tentar de novo: `sudo rm /var/lib/bc250-scx/disabled` e reiniciar. O `./status.sh` mostra uma linha `↳ blocages scx` assim que o arranque atual tenha visto alguma.
 
+O `--performance` continua a ser usado, por outra razão: uma placa de mineração alimentada pela rede e sem bateria não precisa de um perfil de energia, e muito menos de compactação de núcleos.
 ### Opção de lançamento Steam recomendada
 
 ```

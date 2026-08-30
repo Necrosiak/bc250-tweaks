@@ -35,7 +35,7 @@ Het script kloont deze repo naar `/opt/bc250-tweaks` en installeert een systemd-
 | 7 | Gamemode | `/usr/local/bin/` | Daemon + libs handmatig geïnstalleerd (ontbreekt in Bazzite-basisimage) |
 | 8 | PPD-schakelaar | `/usr/local/bin/gamemode-{start,end}.sh` | Schakelt PPD performance↔balanced via busctl bij spelstart |
 | 9 | HHD | `/etc/hhd/state.yml` | balanced-profiel in rust |
-| 10 | scx_lavd | `/etc/scx_loader/config.toml` | `--performance`-scheduler (geen core-compactie — zie hieronder) |
+| 10 | scx_lavd | `/etc/scx_loader/config.toml` | Latency-gerichte scheduler, geladen door `bc250-scx-start` — schakelt zichzelf uit als de vorige start vastliep (zie hieronder) |
 | 11 | MangoHud | `~/.config/MangoHud/MangoHud.conf` | Licht overlay, toggle Shift+F12 |
 | 12 | vkBasalt CAS | `~/.config/vkBasalt.conf` | Adaptief verscherpen, toggle Home |
 | 13 | Proton-GE | `~/.steam/steam/compatibilitytools.d/` | Nieuwste GE-Proton geïnstalleerd |
@@ -45,14 +45,15 @@ Het script kloont deze repo naar `/opt/bc250-tweaks` en installeert een systemd-
 | 17 | Invoer-uaccess | `/etc/udev/rules.d/70-bc250-input-uaccess.rules` | Geeft de gebruiker van de actieve sessie leestoegang tot toetsenbord-/muisnodes (Bazzite tagt alleen joysticks) — nodig om een fysieke toets te koppelen terwijl een game de focus heeft, bijv. Steamcord push-to-talk. ⚠️ Elk proces van die gebruiker kan dan alle toetsaanslagen lezen; verwijder het bestand om terug te draaien |
 | 18 | Core boot sudoers | `/etc/sudoers.d/bc250-core-boot` | NOPASSWD-sudoregels waarmee de Toolkit de 8C/16T-bootservice kan installeren (tee, chmod, systemctl enable/disable) |
 
-### Waarom de scheduler zonder core-compactie draait
+### De scheduler schakelt zichzelf uit wanneer hij vastloopt
 
-Met `--autopower` volgt `scx_lavd` het energieprofiel van het systeem, en dat profiel bepaalt onder meer de core-compactie. In die toestand gooide de kernel hem er telkens uit: `sched_ext: BPF scheduler "lavd_…" disabled (runnable task stall)`, met een taak die 37 seconden niet had gedraaid. De hele interface bevriest 5 tot 10 seconden — op datzelfde moment lopen systemd-services in een timeout, het is dus het systeem dat blokkeert en niet alleen het beeld — waarna `scx_loader` lavd herlaadt en de cyclus opnieuw begint. Games merken er niets van; de desktop en gamescope wel.
+`scx_lavd` levert latency-gerichte scheduling, maar op dit bord gooit de kernel hem er soms uit: `sched_ext: BPF scheduler "lavd_…" disabled (runnable task stall)`, met een taak die 35 tot 45 seconden niet heeft gedraaid. De hele interface bevriest — op datzelfde moment lopen systemd-services in een timeout, het is dus het systeem dat blokkeert en niet alleen het beeld — waarna `scx_loader` herlaadt en de cyclus opnieuw begint.
 
-Gemeten op de referentie-BC-250 (6C/12T) op 30-08-2026: met `--autopower` ongeveer elke drie minuten een blokkade, met `--performance` geen enkele — en `scx_lavd --monitor` meldt `# ACT CPU 12`: alle twaalf CPU's actief, power mode performance, lege wachtrij.
+Gemeten op de referentie-BC-250 (6C/12T, kernel 7.2.1-ogc2, scx-scheds 1.1.3-3) op 30-08-2026: het gebeurt met `--autopower` **én** met `--performance`. De energiemodus wisselen lost niets op. Tot de waargenomen slachtoffers behoort `winedevice.exe`, dus het kan ook tijdens een game toeslaan, niet alleen op het bureaublad.
 
-Een BC-250 is een op netstroom werkend mining-bord zonder accu: een energieprofiel levert hier niets op. `--performance` behoudt lavd en zijn latency-gerichte scheduling, met alle threads beschikbaar. Controleer met `./status.sh`: een regel `↳ blocages scx` betekent dat de scheduler nog steeds vastloopt.
+De bootservice gokt daarom niet naar versies, hij observeert. `bc250-scx-start` telt de evictions van de *vorige* start en schakelt zichzelf vanaf twee uit, zodat de kernelscheduler (EEVDF) blijft staan in plaats van herhaalde freezes op te leggen. Opnieuw proberen: `sudo rm /var/lib/bc250-scx/disabled` en herstarten. `./status.sh` toont een regel `↳ blocages scx` zodra de huidige start er heeft gezien.
 
+`--performance` blijft in gebruik, om een andere reden: een op netstroom werkend mining-bord zonder accu heeft geen energieprofiel nodig, en al helemaal geen core-compactie.
 ### Aanbevolen Steam-startoptie
 
 ```

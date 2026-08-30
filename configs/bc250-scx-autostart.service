@@ -1,5 +1,5 @@
 [Unit]
-Description=BC-250: charge le scheduler scx par défaut (scx_lavd) au boot via scx_loader
+Description=BC-250: charge le scheduler scx par défaut (scx_lavd) au boot, s'il s'est bien tenu
 Documentation=https://github.com/Necrosiak/bc250-tweaks
 Wants=scx_loader.service
 After=multi-user.target
@@ -7,7 +7,9 @@ After=multi-user.target
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStart=/usr/bin/scxctl start --sched scx_lavd
+# Le démarrage passe par un script qui se désarme tout seul si le boot précédent
+# a vu le noyau évincer le scheduler (gels de l'interface). Voir le script.
+ExecStart=/usr/local/bin/bc250-scx-start
 ExecStop=/usr/bin/scxctl stop
 
 [Install]
