@@ -75,6 +75,60 @@ grep -q "zswap.enabled=1" /proc/cmdline 2>/dev/null && row "zswap" "${c_ok}activ
 grep -q "split_lock_detect=off" /proc/cmdline && row "split_lock_detect" "${c_ok}off (bon)${c_z}" || row "split_lock_detect" "${c_dim}on${c_z}"
 [ -x /usr/local/bin/gamemoderun ] || command -v gamemoderun >/dev/null 2>&1 && row "gamemode (bin)" "${c_ok}présent${c_z}"
 
+# ── intégrations matérielles optionnelles ─────────────────────────────────────
+# Lecture seule : ces états empêchent de proposer une fonction TV/manette/Wi-Fi
+# qui n'est pas réellement disponible sur la machine.
+hdr "🔌 Intégrations matérielles"
+
+# NetworkManager est la source de vérité pour l'état Wi-Fi. Le lien sysfs
+# renseigne le pilote effectif sans supposer une puce AIC/Intel/Realtek.
+wifi_dev=""
+if command -v nmcli >/dev/null 2>&1; then
+    wifi_dev=$(nmcli -t -f DEVICE,TYPE device status 2>/dev/null | awk -F: '$2 == "wifi" { print $1; exit }')
+fi
+if [ -n "$wifi_dev" ]; then
+    wifi_state=$(nmcli -t -f DEVICE,STATE device status 2>/dev/null | awk -F: -v d="$wifi_dev" '$1 == d { print $2; exit }')
+    wifi_mod=$(basename "$(readlink -f "/sys/class/net/$wifi_dev/device/driver/module" 2>/dev/null)" 2>/dev/null)
+    [ "$wifi_mod" = "module" ] && wifi_mod=""
+    row "Wi-Fi" "${c_ok}${wifi_dev}${c_z} · ${wifi_state:-état inconnu}${wifi_mod:+ · $wifi_mod}"
+else
+    row "Wi-Fi" "${c_dim}aucun adaptateur NetworkManager${c_z}"
+fi
+
+# Le module peut être prêt sans manette présente. Les deux états sont affichés.
+ds_count=$(grep -Eil 'dualsense|wireless controller|playstation' /sys/class/input/input*/name 2>/dev/null | wc -l | tr -d ' ')
+# /proc/modules et PAS `lsmod | grep -q` : ce script tourne sous `set -o
+# pipefail`, et grep -q sort dès la première ligne trouvée, ce qui tue lsmod par
+# SIGPIPE (141). Le pipeline échouait donc AU MOMENT MÊME où le module était
+# chargé, et la ligne affichait « pilote non chargé » à tort (mesuré 20/09).
+# C'est aussi la source que lit le plugin, donc les deux disent la même chose.
+if grep -q '^hid_playstation ' /proc/modules 2>/dev/null; then
+    row "DualSense" "${c_ok}pilote prêt${c_z} · ${ds_count:-0} connectée(s)"
+else
+    row "DualSense" "${c_dim}pilote hid_playstation non chargé${c_z}"
+fi
+
+# Le statut DRM est fiable; les capacités DSC/CEC demandent une TV et un
+# adaptateur réellement branchés, donc ne sont pas déduites ici.
+display_connected=0
+for status in /sys/class/drm/card*-*/status; do
+    [ -r "$status" ] || continue
+    [ "$(cat "$status" 2>/dev/null)" = "connected" ] && display_connected=$((display_connected + 1))
+done
+if [ "$display_connected" -gt 0 ]; then
+    row "Écran" "${c_ok}${display_connected} connectée(s)${c_z} · DSC/CEC à vérifier sur la TV"
+else
+    row "Écran" "${c_dim}aucun connecteur DRM actif${c_z}"
+fi
+
+# Garde-fou : on ne doit jamais suggérer de démasquer cecd sans bus /dev/cec*.
+cec_dev=$(find /dev -maxdepth 1 -name 'cec*' -type c -print -quit 2>/dev/null)
+if [ -n "$cec_dev" ]; then
+    row "HDMI-CEC" "${c_ok}${cec_dev}${c_z} · intégration TV possible"
+else
+    row "HDMI-CEC" "${c_dim}aucun bus CEC détecté (TV/adaptateur non présent)${c_z}"
+fi
+
 # ── Proton-GE + plugins ───────────────────────────────────────────────────────
 hdr "🎮 Proton-GE & plugins Decky"
 compat="$TARGET_HOME/.steam/steam/compatibilitytools.d"

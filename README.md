@@ -60,6 +60,13 @@ So the boot service does not guess at versions — it observes. `bc250-scx-start
 MANGOHUD=1 MANGOHUD_CONFIG=no_display ENABLE_VKBASALT=1 gamemoderun %command%
 ```
 
+### Hardware integration diagnostic
+
+`bc250-status` also reports, without changing the system, whether a Wi-Fi
+adapter, the DualSense kernel driver and connected controllers, an active DRM
+display connector, and a CEC bus are available. Optional TV, controller and
+wireless features can therefore be gated on actual hardware.
+
 ---
 
 ## Auto-update
