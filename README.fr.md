@@ -105,4 +105,10 @@ Nous faisons le nécessaire pour que ces tweaks fonctionnent sur **tous les syst
 
 ## Mention IA
 
-L'IA a été utilisée dans la réalisation de ce projet — pour la rétro-ingénierie, le développement et la documentation. Elle n'a **pas** servi pour de l'art ni de l'écriture créative. Tout ce qui est publié est relu par un humain, et le résultat reste sous ma responsabilité. Si cela vous dérange, vous voilà informé.
+L'IA (Claude d'Anthropic et Codex d'OpenAI) a été utilisée dans la réalisation de ce projet — pour la rétro-ingénierie, le développement et la documentation. Elle n'a **pas** servi pour de l'art ni de l'écriture créative. Tout ce qui est publié est relu par un humain, et le résultat reste sous ma responsabilité. Si cela vous dérange, vous voilà informé.
+
+## Soutenir le développement
+
+Si ce projet vous est utile, vous pouvez soutenir son développement continu sur [Ko-fi](https://ko-fi.com/nekyron).
+
+[![Soutenez-moi sur Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/nekyron)
